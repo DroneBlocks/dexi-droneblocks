@@ -43,10 +43,6 @@ function viewServicesList() {
 	});
 }
 
-function wtf() {
-  console.log('wtf')
-}
-
 function setGPIO(service: string, state: boolean) {
   
   var gpioService = new ROSLIB.Service({
@@ -55,20 +51,14 @@ function setGPIO(service: string, state: boolean) {
     serviceType : 'dexi_msgs/srv/GPIOSend'
   })
 
-  console.log(gpioService)
-   
   var request = new ROSLIB.ServiceRequest({
     pin: 21,
     state: state
   })
 
-  console.log(request)
-  
   gpioService.callService(request, function(result) {
     console.log(result);
   })
-
-  console.log("done")
 
 }
 
