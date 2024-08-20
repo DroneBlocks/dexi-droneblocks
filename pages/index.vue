@@ -8,6 +8,11 @@
         </NuxtLink>
       </li>
       <li>
+        <NuxtLink to="/services">
+          Service browser
+        </NuxtLink>
+      </li>
+      <li>
         <NuxtLink to="/droneblocks">
           DroneBlocks
         </NuxtLink>

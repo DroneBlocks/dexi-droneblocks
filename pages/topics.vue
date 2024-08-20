@@ -26,16 +26,16 @@
 
 <script setup lang="ts">
 import * as ROSLIB from 'roslib'
-const title = ref('DEXI Topic Browser');
-const host = ref(useRequestURL().hostname);
-const url = 'ws://' + host.value + ':9090';
-const ros = new ROSLIB.Ros({ url: url });
-const params = Object.fromEntries(new URLSearchParams(useRequestURL().search).entries());
+const title = ref('DEXI Topic Browser')
+const host = ref(useRequestURL().hostname)
+const url = 'ws://' + host.value + ':9090'
+const ros = new ROSLIB.Ros({ url: url })
+const params = Object.fromEntries(new URLSearchParams(useRequestURL().search).entries())
 
-const topics = reactive([]);
-const counter = ref(0);
-const topicMessage = ref('No messages received');
-const topicType = ref();
+const topics = reactive([])
+const counter = ref(0)
+const topicMessage = ref('No messages received')
+const topicType = ref()
 
 ros.on('connection', function () {
   init();
@@ -53,9 +53,11 @@ function viewTopicsList() {
     // Response is an object with an array of topics and array of types
     // We will enumerate and merge
     let mergedTopicsData = [];
+    
     topicsData.topics.map((topic, i) => {
       mergedTopicsData.push({topic: topic, type: topicsData.types[i]})
     })
+
     Object.assign(topics, mergedTopicsData);
 	});
 }
