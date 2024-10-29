@@ -1,5 +1,6 @@
 <template>
-    <div class="h-screen bg-gray-400">
+    <div class="h-screen">
+        
         <div class="p-5">
 
             <NuxtLink to="/">&larr; dashboard</NuxtLink>
