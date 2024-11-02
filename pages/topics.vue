@@ -1,27 +1,34 @@
 <template>
-  <div>
-    <NuxtLink to="/">&larr; dashboard</NuxtLink>
-    <h1>{{ title }}</h1>
-    <div v-if="params.topic">
-      Topic: {{ params.topic }} <br />
-      Type: {{ topicType }}
+    <div class="h-screen">
+
+        <div class="p-5">
+            <NuxtLink to="/">&larr; dashboard</NuxtLink>
+
+            <h1 class="text-2xl mt-2">{{ title }}</h1>
+
+            <div v-if="params.topic">
+                Topic: {{ params.topic }} <br />
+                Type: {{ topicType }}
+            </div>
+
+            <ul>
+                <li v-for="topic in topics" :key="topic.topic">
+                    <span v-if="topic.type == 'sensor_msgs/Image'" >
+                        <a :href="'http://' + host + ':8080/stream_viewer?topic=' + topic.topic" :title="topic.type">{{ topic.topic }}</a> &#x1F5BC;
+                    </span>
+                    
+                    <span v-else>
+                        <a :href="'?topic=' + topic.topic" :title="topic.type">{{ topic.topic }}</a>
+                    </span>
+                </li>
+            </ul>
+
+            <pre v-if="params.topic" id="topic-message">
+                <div>{{ counter }} messages received</div>
+                {{ topicMessage }}
+            </pre>
+        </div>
     </div>
-    <ul>
-      <li v-for="topic in topics" :key="topic.topic">
-        <span v-if="topic.type == 'sensor_msgs/Image'" >
-          <a :href="'http://' + host + ':8080/stream_viewer?topic=' + topic.topic" :title="topic.type">{{ topic.topic }}</a> &#x1F5BC;
-        </span>
-        <span v-else>
-          <a :href="'?topic=' + topic.topic" :title="topic.type">{{ topic.topic }}</a>
-        </span>
-      </li>
-    </ul>
-    
-    <pre v-if="params.topic" id="topic-message">
-      <div>{{ counter }} messages received</div>
-      {{ topicMessage }}
-    </pre>
-  </div>
 </template>
 
 <script setup lang="ts">

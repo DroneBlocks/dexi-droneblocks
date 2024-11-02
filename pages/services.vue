@@ -1,20 +1,27 @@
 <template>
-  <div>
-    <NuxtLink to="/">&larr; dashboard</NuxtLink>
-    <h1>{{ title }}</h1>
-    <div v-if="params.service">
-      Service: {{ params.service }} <br />
+    <div class="h-screen">
+        
+        <div class="p-5">
+
+            <NuxtLink to="/">&larr; dashboard</NuxtLink>
+
+            <h1 class="text-2xl mt-2">{{ title }}</h1>
+            
+            <div class="mt-2" v-if="params.service">
+                Service: {{ params.service }} <br />
+            </div>
+            
+            <ul class="mt-2">
+                <li v-for="service in services">
+                    <a :href="'?service=' + service">{{ service }}</a>
+                </li>
+            </ul>
+
+            <div v-if="params.service" id="topic-message">
+                <button @click="setGPIO(params.service, true)">High</button> &nbsp; <button @click="setGPIO(params.service, false)">Low</button>
+            </div>
+        </div>
     </div>
-    <ul>
-      <li v-for="service in services">
-        <a :href="'?service=' + service">{{ service }}</a>
-      </li>
-    </ul>
-    
-    <div v-if="params.service" id="topic-message">
-      <button @click="setGPIO(params.service, true)">High</button> &nbsp; <button @click="setGPIO(params.service, false)">Low</button>
-    </div>
-  </div>
 </template>
 
 <script setup lang="ts">
