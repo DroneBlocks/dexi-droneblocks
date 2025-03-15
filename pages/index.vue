@@ -27,14 +27,16 @@
                     </div>
                 </NuxtLink>
 
-                <NuxtLink class="max-w-sm rounded overflow-hidden shadow-lg bg-primary-content hover:bg-info pt-10 pb-10 ml-5 mr-5" to="http://192.168.4.1:8080">
+                <div class="max-w-sm rounded overflow-hidden shadow-lg bg-primary-content hover:bg-info pt-10 pb-10 ml-5 mr-5">
                     <div class="px-6">
                         <div class="font-bold text-xl mb-2">Pi Camera</div>
                         <p class="text-gray-700 text-base">
-                            View DEXI's Pi Camera Stream
+                            View DEXI's Pi Camera Stream<br /><br />
+                            <a href="http://192.168.4.1:8080" target="_blank" class="link">Raw (higher quality, higher bandwidth)</a><br />
+                            <a href="http://192.168.4.1:8080/stream_viewer?topic=/cam0/image_raw&amp;type=ros_compressed" target="_blank" class="link">Compressed (lower quality, lower bandwidth)</a>
                         </p>
                     </div>
-                </NuxtLink>
+                </div>
 
                 <NuxtLink class="max-w-sm rounded overflow-hidden shadow-lg bg-primary-content hover:bg-info pt-10 pb-10 mt-10 ml-5 mr-5" to="http://192.168.4.1:1880">
                     <div class="px-6">
@@ -67,7 +69,7 @@
 
             <div class="flex items-center justify-center mt-10">
             
-                <div><a href="https://github.com/DroneBlocks/dexi-os/releases/tag/v0.06" target="_blank">DEXI-OS v0.06</a></div>
+                <div><a href="https://github.com/DroneBlocks/dexi-os/releases/tag/v0.07" target="_blank">DEXI-OS v0.07</a></div>
 
             </div>
         </div>
