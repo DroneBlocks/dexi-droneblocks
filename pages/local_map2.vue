@@ -2,6 +2,10 @@
   <div class="dashboard">
     <div class="sidebar">
       <h3>Drone Status</h3>
+      <p><strong>x:</strong> {{ x }}</p>
+      <p><strong>y:</strong> {{ y }}</p>
+      <p><strong>z:</strong> {{ z }}</p>
+      <p><strong>yaw:</strong> {{ yaw }}</p>
       <p><strong>Flight Mode:</strong> {{ flightMode }}</p>
       <p><strong>Battery:</strong> {{ battery }}%</p>
       <p><strong>Position:</strong> ({{ marker.x.toFixed(2) }}, {{ marker.y.toFixed(2) }})</p>
@@ -27,7 +31,13 @@ const battery = ref(100);
 const floorPlanUrl = 'https://your-image-url.com/floorplan.png'; // Set your image URL here
 let floorPlanImage = new Image();
 
-let ros, odomTopic, flightModeTopic, batteryTopic, setpointTopic;
+let ros, odomTopic, flightModeTopic, batteryTopic, setpointTopic; //localPositionTopic;
+
+const x = ref(0);
+const y = ref(0);
+const z = ref(0);
+const yaw_radians = ref(0);
+const yaw = ref(0);
 
 onMounted(() => {
 //   floorPlanImage.src = floorPlanUrl;
@@ -69,6 +79,15 @@ const setupROS = () => {
   odomTopic.subscribe((msg) => {
     marker.value.x = msg.position[0];
     marker.value.y = msg.position[1];
+    x.value = Math.round(msg.position[0] * 100) / 100;
+    y.value = Math.round(msg.position[1] * 100) / 100;
+    z.value = Math.round(msg.position[2] * 100) / 100;
+
+    // Globally sets yaw_radians
+    quaternionToYaw(msg.q);
+    
+    yaw.value = yaw_radians.value * (180 / Math.PI);
+    
     updateCanvas();
   });
   
@@ -81,6 +100,18 @@ const setupROS = () => {
   flightModeTopic.subscribe((msg) => {
     flightMode.value = msg.nav_state;
   });
+
+  // localPositionTopic = new Topic({
+  //   ros,
+  //   name: '/fmu/out/vehicle_local_position',
+  //   messageType: 'px4_msgs/msg/VehicleLocalPosition'
+  // });
+
+  // localPositionTopic.subscribe((msg) => {
+  //   x.value = Math.round(msg.x * 100) / 100;
+  //   y.value = Math.round(msg.y * 100) / 100;
+  //   z.value = Math.round(msg.z * 100) / 100;
+  // });
   
   batteryTopic = new Topic({
     ros,
@@ -94,7 +125,7 @@ const setupROS = () => {
   
   setpointTopic = new Topic({
     ros,
-    name: '/offboard/setpoint_trajectory',
+    name: '/fmu/in/trajectory_setpoint',
     messageType: 'px4_msgs/msg/TrajectorySetpoint'
   });
 };
@@ -182,20 +213,38 @@ const handleClick = (event) => {
   console.log(`Clicked position: (${metersX.toFixed(2)}m, ${metersY.toFixed(2)}m)`);
   
   targetMarkers.value.push({ x: metersX, y: metersY });
-  //sendSetpoint(metersX, metersY);
+  sendSetpoint(metersX, metersY);
   updateCanvas();
 };
 
 const sendSetpoint = (x, y) => {
-  const message = {
-    position: [x, y, -1.0],
-    velocity: [0.0, 0.0, 0.0],
-    acceleration: [0.0, 0.0, 0.0],
-    yaw: 0.0,
-    yaw_rate: 0.0
-  };
-  setpointTopic.publish(message);
+  let distance = 1
+  let new_x = distance * Math.cos(yaw_radians.value) + x
+  let new_y = distance * Math.sin(yaw_radians.value) + y
+
+  let position = {
+    "position": [
+        new_x,
+        new_y,
+        -10
+    ],
+    "yaw": yaw_radians.value
+  }
+
+  console.log(position)
+  setpointTopic.publish(position);
 };
+
+const quaternionToYaw = (q) => {
+    if (isNaN(q[0])) return NaN; // Handle invalid quaternion
+
+    const [q_w, q_x, q_y, q_z] = q;
+
+    // Compute yaw (rotation around Z-axis)
+    yaw_radians.value = Math.atan2(2.0 * (q_w * q_z + q_x * q_y), 1.0 - 2.0 * (q_y * q_y + q_z * q_z)); // Radians
+
+}
+
 
 const updateCanvas = () => {
   const ctx = canvas.value.getContext('2d');
