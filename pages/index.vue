@@ -69,7 +69,7 @@
 
             <div class="flex items-center justify-center mt-10">
             
-                <div><a href="https://github.com/DroneBlocks/dexi-os/releases/tag/v0.07" target="_blank">DEXI-OS v0.07</a></div>
+                <div><a href="https://github.com/DroneBlocks/dexi-os/releases/tag/v0.08" target="_blank">DEXI-OS v0.08</a></div>
 
             </div>
         </div>
