@@ -17,9 +17,10 @@ export default {
     };
   },
   mounted() {
+    const host = ref(useRequestURL().hostname)
     // Connect to the ROSBridge WebSocket
     const ros = new ROSLIB.Ros({
-      url: 'ws://192.168.4.1:9090',  // Adjust with your ROSBridge URL
+      url: 'ws://' + host.value + ':9090',
     });
 
     ros.on('connection', function () {
