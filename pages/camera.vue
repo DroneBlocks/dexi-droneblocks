@@ -2,7 +2,14 @@
   <div>
     <h1>ROS Image Stream</h1>
     <!-- Image tag to display the live image -->
-    <img v-if="imageData" :src="imageData" alt="ROS Image" width="640" height="480" />
+    <img 
+      v-if="imageData" 
+      :src="imageData" 
+      alt="ROS Image" 
+      width="640" 
+      height="480" 
+      :style="{ transform: shouldInvert ? 'rotate(180deg)' : 'none' }"
+    />
     <p v-else>Loading image...</p>
   </div>
 </template>
@@ -14,9 +21,14 @@ export default {
   data() {
     return {
       imageData: null,  // This will store the base64-encoded image
+      shouldInvert: false, // Default value for image inversion
     };
   },
   mounted() {
+    // Get the invert parameter from the URL
+    const route = useRoute();
+    this.shouldInvert = route.query.invert === 'true';
+
     const host = ref(useRequestURL().hostname)
     // Connect to the ROSBridge WebSocket
     const ros = new ROSLIB.Ros({
