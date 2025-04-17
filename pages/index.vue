@@ -7,10 +7,48 @@
                 <img src="~/assets/droneblocks_logo.svg" />
             </div>
 
-            <div class="grid grid-cols-3 row-span-2">
+            <div class="grid grid-cols-4 gap-6 row-span-2">
 
-                <NuxtLink class="max-w-sm rounded overflow-hidden shadow-lg bg-primary-content hover:bg-info pt-10 pb-10 ml-5 mr-5" to="/topics">
-                    <div class="px-6">
+                <div class="w-60 rounded overflow-hidden shadow-lg bg-primary-content hover:bg-info pt-5 pb-5">
+                    <div class="px-4">
+                        <div class="font-bold text-xl mb-2">DEXI Pi Camera</div>
+                        <div class="flex flex-col gap-2 mt-2">
+                            <div class="relative inline-block group">
+                                <a :href="`http://${hostname}:8080`" target="_blank" class="link text-sm">📹 High Quality Stream</a>
+                                <div class="absolute invisible group-hover:visible bg-gray-800 text-white text-xs rounded p-2 -mt-2 left-full ml-2 w-48">
+                                    Higher quality stream with increased bandwidth usage
+                                </div>
+                            </div>
+                            <div class="relative inline-block group">
+                                <a :href="`http://${hostname}:8080/stream_viewer?topic=/cam0/image_raw&amp;type=ros_compressed`" target="_blank" class="link text-sm">🎥 Compressed Stream</a>
+                                <div class="absolute invisible group-hover:visible bg-gray-800 text-white text-xs rounded p-2 -mt-2 left-full ml-2 w-48">
+                                    Lower quality stream optimized for reduced bandwidth
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <NuxtLink class="w-60 rounded overflow-hidden shadow-lg bg-primary-content hover:bg-info pt-5 pb-5" :to="`http://${hostname}:1880`" target="_blank">
+                    <div class="px-4">
+                        <div class="font-bold text-xl mb-2">Node-RED</div>
+                        <p class="text-gray-700 text-base">
+                            Node-RED visual programming with DEXI
+                        </p>
+                    </div>
+                </NuxtLink>
+
+                <NuxtLink class="w-60 rounded overflow-hidden shadow-lg bg-primary-content hover:bg-info pt-5 pb-5" :to="`http://${hostname}:9999`" target="_blank">
+                    <div class="px-4">
+                        <div class="font-bold text-xl mb-2">VS Code Server</div>
+                        <p class="text-gray-700 text-base">
+                            Coding with the DEXI ROS2 project in your browser
+                        </p>
+                    </div>
+                </NuxtLink>
+
+                <NuxtLink class="w-60 rounded overflow-hidden shadow-lg bg-primary-content hover:bg-info pt-5 pb-5" to="/topics">
+                    <div class="px-4">
                         <div class="font-bold text-xl mb-2">Topic Browser</div>
                         <p class="text-gray-700 text-base">
                             View ROS2 topics running on DEXI
@@ -18,8 +56,8 @@
                     </div>
                 </NuxtLink>
 
-                <NuxtLink class="max-w-sm rounded overflow-hidden shadow-lg bg-primary-content hover:bg-info pt-10 pb-10 ml-5 mr-5" to="/services">
-                    <div class="px-6">
+                <NuxtLink class="w-60 rounded overflow-hidden shadow-lg bg-primary-content hover:bg-info pt-5 pb-5" to="/services">
+                    <div class="px-4">
                         <div class="font-bold text-xl mb-2">Service Browser</div>
                         <p class="text-gray-700 text-base">
                             View ROS2 services running on DEXI
@@ -27,28 +65,8 @@
                     </div>
                 </NuxtLink>
 
-                <div class="max-w-sm rounded overflow-hidden shadow-lg bg-primary-content hover:bg-info pt-10 pb-10 ml-5 mr-5">
-                    <div class="px-6">
-                        <div class="font-bold text-xl mb-2">Pi Camera</div>
-                        <p class="text-gray-700 text-base">
-                            View DEXI's Pi Camera Stream<br /><br />
-                            <a href="http://192.168.4.1:8080" target="_blank" class="link">Raw (higher quality, higher bandwidth)</a><br />
-                            <a href="http://192.168.4.1:8080/stream_viewer?topic=/cam0/image_raw&amp;type=ros_compressed" target="_blank" class="link">Compressed (lower quality, lower bandwidth)</a>
-                        </p>
-                    </div>
-                </div>
-
-                <NuxtLink class="max-w-sm rounded overflow-hidden shadow-lg bg-primary-content hover:bg-info pt-10 pb-10 mt-10 ml-5 mr-5" to="http://192.168.4.1:1880">
-                    <div class="px-6">
-                        <div class="font-bold text-xl mb-2">Node-RED</div>
-                        <p class="text-gray-700 text-base">
-                            Launch the Node-RED editor and program DEXI
-                        </p>
-                    </div>
-                </NuxtLink>
-
-                <NuxtLink class="max-w-sm rounded overflow-hidden shadow-lg bg-primary-content hover:bg-info pt-10 pb-10 mt-10 ml-5 mr-5" to="https://github.com/droneblocks/dexi" target="_blank">
-                    <div class="px-6">
+                <NuxtLink class="w-60 rounded overflow-hidden shadow-lg bg-primary-content hover:bg-info pt-5 pb-5" to="https://github.com/droneblocks/dexi" target="_blank">
+                    <div class="px-4">
                         <div class="font-bold text-xl mb-2">GitHub</div>
                         <p class="text-gray-700 text-base">
                             Access the DEXI code repository
@@ -56,8 +74,8 @@
                     </div>
                 </NuxtLink>
 
-                <NuxtLink class="max-w-sm rounded overflow-hidden shadow-lg bg-primary-content hover:bg-info pt-10 pb-10 mt-10 ml-5 mr-5" to="https://discord.gg/Wjw7wGf7Wn" target="_blank">
-                    <div class="px-6">
+                <NuxtLink class="w-60 rounded overflow-hidden shadow-lg bg-primary-content hover:bg-info pt-5 pb-5" to="https://discord.gg/Wjw7wGf7Wn" target="_blank">
+                    <div class="px-4">
                         <div class="font-bold text-xl mb-2">Discord</div>
                         <p class="text-gray-700 text-base">
                             Join the DroneBlocks Discord for support and conversation
@@ -69,10 +87,14 @@
 
             <div class="flex items-center justify-center mt-10">
             
-                <div><a href="https://github.com/DroneBlocks/dexi-os/releases/tag/v0.08" target="_blank">DEXI-OS v0.08</a></div>
+                <div><a href="https://github.com/DroneBlocks/dexi-os/releases/tag/v0.09" target="_blank">DEXI-OS v0.09</a></div>
 
             </div>
         </div>
     </div>
 
 </template>
+
+<script setup>
+const hostname = process.client ? window.location.hostname : '192.168.4.1'
+</script>
