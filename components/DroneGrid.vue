@@ -1,5 +1,27 @@
 <template>
   <div class="relative w-full h-full bg-gray-800 p-4">
+    <!-- Position Display Widget -->
+    <div class="absolute top-4 right-4 bg-gray-900/80 text-white p-3 rounded-lg shadow-lg z-10">
+      <div class="text-sm font-mono space-y-1">
+        <div class="flex justify-between">
+          <span class="text-gray-400">X:</span>
+          <span>{{ formatNumber(dronePosition.x) }}m</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-gray-400">Y:</span>
+          <span>{{ formatNumber(dronePosition.y) }}m</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-gray-400">Z:</span>
+          <span>{{ formatNumber(dronePosition.z) }}m</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-gray-400">Yaw:</span>
+          <span>{{ formatNumber(droneOrientation) }}°</span>
+        </div>
+      </div>
+    </div>
+
     <!-- Grid Container -->
     <div class="relative w-full h-full border border-gray-600" @click="handleGridClick">
       <!-- Grid Lines -->
@@ -38,10 +60,48 @@ import ROSLIB from 'roslib'
 import { useROS } from '~/composables/useROS'
 
 interface OdometryMessage {
-  x: number
-  y: number
-  z: number
-  q: [number, number, number, number]  // Quaternion [w, x, y, z]
+  position: [number, number, number]
+  q: [number, number, number, number]
+}
+
+interface VehicleCommand {
+  timestamp: number
+  param1: number
+  param2: number
+  param3: number
+  param4: number
+  param5: number
+  param6: number
+  param7: number
+  command: number
+  target_system: number
+  target_component: number
+  source_system: number
+  source_component: number
+  confirmation: number
+  from_external: boolean
+}
+
+interface PositionSetpoint {
+  timestamp: number
+  valid: boolean
+  type: number
+  vx: number
+  vy: number
+  vz: number
+  lat: number
+  lon: number
+  alt: number
+  yaw: number
+  loiter_radius: number
+  loiter_minor_radius: number
+  loiter_direction_counter_clockwise: boolean
+  loiter_orientation: number
+  loiter_pattern: number
+  acceptance_radius: number
+  cruising_speed: number
+  gliding_enabled: boolean
+  cruising_throttle: number
 }
 
 const { getROSURL } = useROS()
@@ -51,12 +111,24 @@ const ros = new ROSLIB.Ros({
   url: getROSURL()
 })
 
-// Drone state
-const dronePosition = ref({ x: 0, y: 0 })
+// Helper function to safely format numbers
+const formatNumber = (value: number | undefined): string => {
+  if (value === undefined) return '0.00'
+  return value.toFixed(2)
+}
+
+// Drone state with proper initialization
+const dronePosition = ref({ x: 0, y: 0, z: 0 })
 const droneOrientation = ref(0)
 
 // Odometry topic subscription
 let odometryTopic: ROSLIB.Topic | null = null
+
+// Add command publisher
+let commandTopic: ROSLIB.Topic | null = null
+
+// Add position setpoint publisher
+let positionSetpointTopic: ROSLIB.Topic | null = null
 
 onMounted(() => {
   // Subscribe to odometry topic
@@ -68,14 +140,35 @@ onMounted(() => {
 
   odometryTopic.subscribe((message: OdometryMessage) => {
     // Update drone position (convert from NED to grid coordinates)
-    dronePosition.value = {
-      x: message.x,  // East position
-      y: -message.y  // North position (inverted for grid)
+    if (message && Array.isArray(message.position) && message.position.length === 3) {
+      dronePosition.value = {
+        x: message.position[0],  // East position
+        y: -message.position[1], // North position (inverted for grid)
+        z: -message.position[2]  // Down position (inverted for up)
+      }
+      
+      // Update orientation (convert from quaternion to degrees)
+      if (message.q && Array.isArray(message.q) && message.q.length === 4) {
+        const q = message.q
+        droneOrientation.value = Math.atan2(2 * (q[0] * q[3] + q[1] * q[2]), 1 - 2 * (q[2] * q[2] + q[3] * q[3])) * (180 / Math.PI)
+      }
+    } else {
+      console.warn('Invalid odometry message format:', message)
     }
-    
-    // Update orientation (convert from quaternion to degrees)
-    const q = message.q
-    droneOrientation.value = Math.atan2(2 * (q[0] * q[3] + q[1] * q[2]), 1 - 2 * (q[2] * q[2] + q[3] * q[3])) * (180 / Math.PI)
+  })
+
+  // Initialize command publisher
+  commandTopic = new ROSLIB.Topic({
+    ros: ros,
+    name: '/fmu/in/vehicle_command',
+    messageType: 'px4_msgs/msg/VehicleCommand'
+  })
+
+  // Initialize position setpoint publisher
+  positionSetpointTopic = new ROSLIB.Topic({
+    ros: ros,
+    name: '/fmu/in/position_setpoint',
+    messageType: 'px4_msgs/msg/PositionSetpoint'
   })
 })
 
@@ -86,7 +179,7 @@ onBeforeUnmount(() => {
 })
 
 const handleGridClick = (event: MouseEvent) => {
-  // Get the grid container element (the one with the click handler)
+  // Get the grid container element
   const gridContainer = event.currentTarget as HTMLElement
   const rect = gridContainer.getBoundingClientRect()
   
@@ -95,11 +188,37 @@ const handleGridClick = (event: MouseEvent) => {
   const relativeY = (rect.bottom - event.clientY) / rect.height
   
   // Convert to grid coordinates (-5 to 5 meters)
-  // X is vertical (up/down), Y is horizontal (left/right)
   const gridX = (relativeY * 10) - 5  // Convert to -5 to 5 range
   const gridY = (relativeX * 10) - 5  // Convert to -5 to 5 range
   
-  console.log(`Grid click at: x=${gridX.toFixed(2)}m, y=${gridY.toFixed(2)}m`)
+  // Create position setpoint message
+  const setpoint: PositionSetpoint = {
+    timestamp: Date.now() * 1000,
+    valid: true,
+    type: 0, // SETPOINT_TYPE_POSITION
+    vx: gridX,
+    vy: gridY,
+    vz: 0,
+    lat: 0, // Not used in local frame
+    lon: 0, // Not used in local frame
+    alt: 1.0, // 1 meter altitude
+    yaw: 0, // Maintain current yaw
+    loiter_radius: 0,
+    loiter_minor_radius: 0,
+    loiter_direction_counter_clockwise: false,
+    loiter_orientation: 0,
+    loiter_pattern: 0,
+    acceptance_radius: 0.3, // 30cm acceptance radius
+    cruising_speed: 0,
+    gliding_enabled: false,
+    cruising_throttle: 0
+  }
+
+  // Publish the setpoint
+  if (positionSetpointTopic) {
+    positionSetpointTopic.publish(setpoint)
+    console.log(`Sending drone to local position: x=${gridX.toFixed(2)}m, y=${gridY.toFixed(2)}m`)
+  }
 }
 </script>
 
