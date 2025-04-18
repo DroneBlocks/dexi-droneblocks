@@ -11,8 +11,8 @@
     <div class="flex-1 flex">
       <!-- Main Content Area -->
       <div class="flex-1 bg-blue-500">
-        <div class="p-4">
-          Main Content
+        <div class="p-4 h-full">
+          <DroneGrid />
         </div>
       </div>
 
@@ -56,6 +56,7 @@
 import ROSLIB from 'roslib';
 import { useROS } from '~/composables/useROS';
 import { ref } from 'vue';
+import DroneGrid from '~/components/DroneGrid.vue';
 
 const { getROSURL } = useROS();
 
