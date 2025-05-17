@@ -1,54 +1,75 @@
 <template>
-  <div class="bg-gray-900 text-white p-4 flex items-center justify-between">
-    <!-- Flight Mode Display -->
-    <div class="flex items-center space-x-4">
-      <span class="text-gray-400">Flight Mode:</span>
-      <span class="font-mono">{{ flightMode }}</span>
+  <div class="flex h-full">
+    <!-- Left side - Controls and Grid -->
+    <div class="w-1/2 flex flex-col">
+      <!-- Controls Section -->
+      <div class="bg-gray-900 text-white p-4">
+        <!-- Flight Mode Display -->
+        <div class="flex items-center space-x-4 mb-4">
+          <span class="text-gray-400">Flight Mode:</span>
+          <span class="font-mono">{{ flightMode }}</span>
+        </div>
+
+        <!-- Control Buttons -->
+        <div class="flex items-center space-x-4">
+          <!-- Mode Buttons -->
+          <button 
+            @click="setMode(2)" 
+            class="px-3 py-1.5 text-sm bg-blue-600 rounded-lg hover:bg-blue-700"
+          >
+            Position Mode
+          </button>
+          <button 
+            @click="setMode(17)" 
+            class="px-3 py-1.5 text-sm bg-blue-600 rounded-lg hover:bg-blue-700"
+          >
+            Takeoff Mode
+          </button>
+
+          <!-- Arm Button -->
+          <button 
+            @click="armDrone" 
+            :disabled="isArmed"
+            class="px-3 py-1.5 text-sm rounded-lg"
+            :class="isArmed ? 'bg-green-600' : 'bg-red-600 hover:bg-red-700'"
+          >
+            {{ isArmed ? 'Armed' : 'Arm' }}
+          </button>
+
+          <!-- Move Forward Button -->
+          <button 
+            @click="moveForward" 
+            :disabled="!isFlying"
+            class="px-3 py-1.5 text-sm bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50"
+          >
+            Move Forward 3m
+          </button>
+
+          <!-- Land Button -->
+          <button 
+            @click="land" 
+            :disabled="!isFlying"
+            class="px-3 py-1.5 text-sm bg-yellow-600 rounded-lg hover:bg-yellow-700 disabled:opacity-50"
+          >
+            Land
+          </button>
+        </div>
+      </div>
+
+      <!-- Drone Grid Section -->
+      <div class="flex-1 bg-gray-800">
+        <slot></slot>
+      </div>
     </div>
 
-    <!-- Control Buttons -->
-    <div class="flex items-center space-x-4">
-      <!-- Mode Buttons -->
-      <button 
-        @click="setMode(2)" 
-        class="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-700"
-      >
-        Position Mode
-      </button>
-      <button 
-        @click="setMode(17)" 
-        class="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-700"
-      >
-        Takeoff Mode
-      </button>
-
-      <!-- Arm Button -->
-      <button 
-        @click="armDrone" 
-        :disabled="isArmed"
-        class="px-4 py-2 rounded-lg"
-        :class="isArmed ? 'bg-green-600' : 'bg-red-600 hover:bg-red-700'"
-      >
-        {{ isArmed ? 'Armed' : 'Arm' }}
-      </button>
-
-      <!-- Move Forward Button -->
-      <button 
-        @click="moveForward" 
-        :disabled="!isFlying"
-        class="px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50"
-      >
-        Move Forward 3m
-      </button>
-
-      <!-- Land Button -->
-      <button 
-        @click="land" 
-        :disabled="!isFlying"
-        class="px-4 py-2 bg-yellow-600 rounded-lg hover:bg-yellow-700 disabled:opacity-50"
-      >
-        Land
-      </button>
+    <!-- Right side - Unity Container -->
+    <div class="w-1/2 bg-gray-800 p-4">
+      <div class="h-full flex flex-col">
+        <div class="text-white text-lg font-semibold mb-4">Unity Visualization</div>
+        <div class="flex-1 bg-gray-700 rounded-lg flex items-center justify-center">
+          <span class="text-gray-400">Unity WebGL content will be placed here</span>
+        </div>
+      </div>
     </div>
   </div>
 </template>
