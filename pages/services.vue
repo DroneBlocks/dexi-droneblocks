@@ -26,9 +26,12 @@
 
 <script setup lang="ts">
 import * as ROSLIB from 'roslib'
+import { useROS } from '~/composables/useROS'
+
+const { getROSURL } = useROS()
 const title = ref('DEXI Service Browser')
 const host = ref(useRequestURL().hostname)
-const url = 'ws://' + host.value + ':9090'
+const url = getROSURL()
 const ros = new ROSLIB.Ros({ url: url })
 const params = Object.fromEntries(new URLSearchParams(useRequestURL().search).entries())
 const services = reactive([])

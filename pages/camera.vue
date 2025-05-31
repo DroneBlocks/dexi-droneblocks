@@ -16,6 +16,7 @@
 
 <script>
 import ROSLIB from "roslib";
+import { useROS } from '~/composables/useROS'
 
 export default {
   data() {
@@ -29,10 +30,10 @@ export default {
     const route = useRoute();
     this.shouldInvert = route.query.invert === 'true';
 
-    const host = ref(useRequestURL().hostname)
+    const { getROSURL } = useROS()
     // Connect to the ROSBridge WebSocket
     const ros = new ROSLIB.Ros({
-      url: 'ws://' + host.value + ':9090',
+      url: getROSURL(),
     });
 
     ros.on('connection', function () {
