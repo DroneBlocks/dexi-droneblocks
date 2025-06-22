@@ -1,81 +1,68 @@
 <template>
-  <div class="flex h-full">
-    <!-- Left side - Controls and Grid -->
-    <div class="w-1/2 flex flex-col">
-      <!-- Controls Section -->
-      <div class="bg-gray-900 text-white p-4">
-        <!-- Flight Mode Display -->
-        <div class="flex items-center space-x-4 mb-4">
-          <span class="text-gray-400">Flight Mode:</span>
-          <span class="font-mono">{{ flightMode }}</span>
-        </div>
-
-        <!-- Control Buttons -->
-        <div class="flex items-center space-x-4">
-          <!-- Mode Buttons -->
-          <button 
-            @click="setMode(2)" 
-            class="px-3 py-1.5 text-sm bg-blue-600 rounded-lg hover:bg-blue-700"
-          >
-            Position Mode
-          </button>
-          <button 
-            @click="setMode(17)" 
-            class="px-3 py-1.5 text-sm bg-blue-600 rounded-lg hover:bg-blue-700"
-          >
-            Takeoff Mode
-          </button>
-
-          <!-- Arm Button -->
-          <button 
-            @click="armDrone" 
-            :disabled="isArmed"
-            class="px-3 py-1.5 text-sm rounded-lg"
-            :class="isArmed ? 'bg-green-600' : 'bg-red-600 hover:bg-red-700'"
-          >
-            {{ isArmed ? 'Armed' : 'Arm' }}
-          </button>
-
-          <!-- Move Forward Button -->
-          <button 
-            @click="moveForward" 
-            :disabled="!isFlying"
-            class="px-3 py-1.5 text-sm bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50"
-          >
-            Move Forward 3m
-          </button>
-
-          <!-- Land Button -->
-          <button 
-            @click="land" 
-            :disabled="!isFlying"
-            class="px-3 py-1.5 text-sm bg-yellow-600 rounded-lg hover:bg-yellow-700 disabled:opacity-50"
-          >
-            Land
-          </button>
-        </div>
-      </div>
-
-      <!-- Drone Grid Section -->
-      <div class="flex-1 bg-gray-800">
-        <slot></slot>
-      </div>
+  <div class="w-full bg-gray-900 text-white p-4">
+    <!-- Flight Mode Display -->
+    <div class="flex items-center space-x-4 mb-4">
+      <span class="text-gray-400">Flight Mode:</span>
+      <span class="font-mono">{{ flightMode }}</span>
     </div>
 
-    <!-- Right side - Unity Container -->
-    <div class="w-1/2 bg-gray-800 p-4">
-      <div class="h-full flex flex-col">
-        <div class="text-white text-lg font-semibold mb-4">Unity Visualization</div>
-        <div class="flex-1 bg-gray-700 rounded-lg flex items-center justify-center">
-          <span class="text-gray-400">Unity WebGL content will be placed here</span>
-        </div>
-      </div>
+    <!-- Control Buttons -->
+    <div class="flex items-center space-x-4">
+      <!-- Mode Buttons -->
+      <button 
+        @click="setMode(2)" 
+        class="px-3 py-1.5 text-sm bg-blue-600 rounded-lg hover:bg-blue-700"
+      >
+        Position Mode
+      </button>
+      <button 
+        @click="setMode(17)" 
+        class="px-3 py-1.5 text-sm bg-blue-600 rounded-lg hover:bg-blue-700"
+      >
+        Takeoff Mode
+      </button>
+      <button 
+        @click="startOffboardMode" 
+        :disabled="isOffboardActive"
+        class="px-3 py-1.5 text-sm rounded-lg"
+        :class="isOffboardActive ? 'bg-green-600' : 'bg-blue-600 hover:bg-blue-700'"
+      >
+        {{ isOffboardActive ? 'Offboard Active' : 'Offboard Mode' }}
+      </button>
+
+      <!-- Arm Button -->
+      <button 
+        @click="armDrone" 
+        :disabled="isArmed"
+        class="px-3 py-1.5 text-sm rounded-lg"
+        :class="isArmed ? 'bg-green-600' : 'bg-red-600 hover:bg-red-700'"
+      >
+        {{ isArmed ? 'Armed' : 'Arm' }}
+      </button>
+
+      <!-- Move Forward Button -->
+      <button 
+        @click="moveForward" 
+        :disabled="!isFlying"
+        class="px-3 py-1.5 text-sm bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50"
+      >
+        Move Forward 3m
+      </button>
+
+      <!-- Land Button -->
+      <button 
+        @click="land" 
+        :disabled="!isFlying"
+        class="px-3 py-1.5 text-sm bg-yellow-600 rounded-lg hover:bg-yellow-700 disabled:opacity-50"
+      >
+        Land
+      </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount, defineExpose } from 'vue'
 import ROSLIB from 'roslib'
 import { useROS } from '~/composables/useROS'
 
@@ -90,11 +77,20 @@ const ros = new ROSLIB.Ros({
 const flightMode = ref('Unknown')
 const isArmed = ref(false)
 const isFlying = ref(false)
+const isOffboardActive = ref(false)
+
+// Offboard target position (reactive so it can be updated by other components)
+const offboardTargetPosition = ref({ x: 0, y: 0, z: -1.0, yaw: 0 })
 
 // Topics
 let vehicleStatusTopic: ROSLIB.Topic | null = null
 let vehicleCommandTopic: ROSLIB.Topic | null = null
 let positionSetpointTopic: ROSLIB.Topic | null = null
+let offboardControlModeTopic: ROSLIB.Topic | null = null
+let trajectorySetpointTopic: ROSLIB.Topic | null = null
+
+// Offboard heartbeat timer
+let offboardHeartbeatTimer: NodeJS.Timeout | null = null
 
 // Flight mode mapping
 const flightModes: { [key: number]: string } = {
@@ -177,12 +173,28 @@ onMounted(() => {
     name: '/fmu/in/position_setpoint',
     messageType: 'px4_msgs/msg/PositionSetpoint'
   })
+
+  // Initialize offboard control mode publisher
+  offboardControlModeTopic = new ROSLIB.Topic({
+    ros: ros,
+    name: '/fmu/in/offboard_control_mode',
+    messageType: 'px4_msgs/msg/OffboardControlMode'
+  })
+
+  // Initialize trajectory setpoint publisher
+  trajectorySetpointTopic = new ROSLIB.Topic({
+    ros: ros,
+    name: '/fmu/in/trajectory_setpoint',
+    messageType: 'px4_msgs/msg/TrajectorySetpoint'
+  })
 })
 
 onBeforeUnmount(() => {
   if (vehicleStatusTopic) {
     vehicleStatusTopic.unsubscribe()
   }
+  // Stop offboard heartbeat if active
+  stopOffboardHeartbeat()
 })
 
 // Command functions
@@ -238,31 +250,122 @@ const land = () => {
 }
 
 const moveForward = () => {
-  if (!positionSetpointTopic) return
+  if (!trajectorySetpointTopic) return
 
   const setpoint = {
     timestamp: Date.now() * 1000,
-    valid: true,
-    type: 0, // SETPOINT_TYPE_POSITION
-    vx: 3.0, // Move 3 meters forward in NED frame
-    vy: 0,
-    vz: 0,
-    lat: 0,
-    lon: 0,
-    alt: 0, // Maintain current altitude
-    yaw: 0, // Maintain current yaw
-    loiter_radius: 0,
-    loiter_minor_radius: 0,
-    loiter_direction_counter_clockwise: false,
-    loiter_orientation: 0,
-    loiter_pattern: 0,
-    acceptance_radius: 0.3,
-    cruising_speed: 0,
-    gliding_enabled: false,
-    cruising_throttle: 0
+    position: [3.0, 0, -1.0], // Move 3 meters forward in NED frame (x=3, y=0, z=-1)
+    velocity: [0, 0, 0],
+    acceleration: [0, 0, 0],
+    jerk: [0, 0, 0],
+    yaw: 0
   }
 
-  positionSetpointTopic.publish(setpoint)
-  console.log('Sending move forward command')
+  trajectorySetpointTopic.publish(setpoint)
+  console.log('Sending move forward command using trajectory setpoint')
 }
+
+// Function to publish local coordinates to trajectory setpoint
+const publishLocalPosition = (x: number, y: number, z: number = -1.0, yaw: number = 0) => {
+  if (!trajectorySetpointTopic) return
+
+  // Update the target position for the heartbeat
+  offboardTargetPosition.value = { x, y, z, yaw }
+
+  const setpoint = {
+    timestamp: Date.now() * 1000,
+    position: [x, y, z], // Local coordinates in NED frame
+    velocity: [0, 0, 0],
+    acceleration: [0, 0, 0],
+    jerk: [0, 0, 0],
+    yaw: yaw
+  }
+
+  trajectorySetpointTopic.publish(setpoint)
+  console.log(`Sending trajectory setpoint: x=${x}m, y=${y}m, z=${z}m, yaw=${yaw}°`)
+}
+
+// Offboard mode functions
+const startOffboardMode = () => {
+  if (isOffboardActive.value) return
+
+  console.log('Starting offboard mode')
+  isOffboardActive.value = true
+
+  // Set flight mode to offboard
+  setMode(14) // OFFBOARD mode
+
+  // Start publishing offboard heartbeat
+  startOffboardHeartbeat()
+}
+
+const startOffboardHeartbeat = () => {
+  if (!offboardControlModeTopic || !trajectorySetpointTopic) return
+
+  // Publish initial offboard control mode message
+  const offboardControlMode = {
+    timestamp: Date.now() * 1000,
+    position: true,
+    velocity: false,
+    acceleration: false,
+    attitude: false,
+    body_rate: false
+  }
+
+  // Publish initial trajectory setpoint (hold current position)
+  const trajectorySetpoint = {
+    timestamp: Date.now() * 1000,
+    position: [offboardTargetPosition.value.x, offboardTargetPosition.value.y, offboardTargetPosition.value.z],
+    velocity: [0, 0, 0],
+    acceleration: [0, 0, 0],
+    jerk: [0, 0, 0],
+    yaw: offboardTargetPosition.value.yaw
+  }
+
+  offboardControlModeTopic.publish(offboardControlMode)
+  trajectorySetpointTopic.publish(trajectorySetpoint)
+
+  // Start heartbeat timer (publish every 50ms)
+  offboardHeartbeatTimer = setInterval(() => {
+    const timestamp = Date.now() * 1000
+    
+    // Publish offboard control mode heartbeat
+    offboardControlModeTopic.publish({
+      timestamp,
+      position: true,
+      velocity: false,
+      acceleration: false,
+      attitude: false,
+      body_rate: false
+    })
+
+    // Publish trajectory setpoint heartbeat using current target position
+    trajectorySetpointTopic.publish({
+      timestamp,
+      position: [offboardTargetPosition.value.x, offboardTargetPosition.value.y, offboardTargetPosition.value.z],
+      velocity: [0, 0, 0],
+      acceleration: [0, 0, 0],
+      jerk: [0, 0, 0],
+      yaw: offboardTargetPosition.value.yaw
+    })
+  }, 50) // 50ms = 20Hz
+
+  console.log('Offboard heartbeat started')
+}
+
+const stopOffboardHeartbeat = () => {
+  if (offboardHeartbeatTimer) {
+    clearInterval(offboardHeartbeatTimer)
+    offboardHeartbeatTimer = null
+    isOffboardActive.value = false
+    console.log('Offboard heartbeat stopped')
+  }
+}
+
+// Expose functions and state for other components
+defineExpose({
+  publishLocalPosition,
+  isOffboardActive,
+  offboardTargetPosition
+})
 </script> 

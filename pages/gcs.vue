@@ -1,10 +1,11 @@
 <template>
-  <div class="flex flex-col h-screen">
+  <!-- <div class="flex flex-col h-screen">
     <FlightControls>
       <DroneGrid />
     </FlightControls>
-  </div>
+  </div> -->
   <div>
+    <FlightControls />
     <GCSLayout />
   </div>
 </template>
