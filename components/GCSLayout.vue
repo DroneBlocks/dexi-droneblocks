@@ -6,7 +6,7 @@
       <!-- Main Content Area -->
       <div class="flex-1 bg-black relative">
         <div class="p-4 h-full">
-          <CameraFeed :should-invert="false" />
+          <CameraFeed :should-invert="true" />
         </div>
       </div>
 
