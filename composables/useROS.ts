@@ -1,7 +1,8 @@
 export const useROS = () => {
   const getROSURL = (): string => {
-    const hostname = process.client ? window.location.hostname : '192.168.4.1'
-    return hostname
+    // Use the current hostname with WebSocket protocol and port 9090
+    const hostname = window.location.hostname
+    return `ws://${hostname}:9090`
   }
 
   return {

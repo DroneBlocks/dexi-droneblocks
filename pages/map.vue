@@ -1,12 +1,14 @@
 <template>
   <div class="flex flex-col h-screen">
     <MainMenu />
+    <!-- Flight Controls -->
+    <FlightControls ref="flightControlsRef" />
     <!-- Main Content -->
     <div class="flex-1 flex">
       <!-- Main Content Area -->
       <div class="flex-1 bg-black relative">
         <div class="p-4 h-full">
-          <CameraFeed :should-invert="true" />
+          <DroneGrid ref="droneGridRef" />
         </div>
       </div>
 
@@ -26,23 +28,35 @@
         <ServoPanel />
       </div>
     </div>
-
-    <!-- Drone Grid Section -->
-    <div class="bg-gray-800">
-      <DroneGrid />
-    </div>
   </div>
 </template>
 
 <script setup>
+import { ref, onMounted } from 'vue'
 import ROSLIB from 'roslib';
 import { useROS } from '~/composables/useROS';
-import CameraFeed from '~/components/CameraFeed.vue';
+import DroneGrid from '~/components/DroneGrid.vue';
 import ServoPanel from '~/components/ServoPanel.vue';
 import MainMenu from '~/components/MainMenu.vue';
-import DroneGrid from '~/components/DroneGrid.vue';
+import FlightControls from '~/components/FlightControls.vue';
 
 const { getROSURL } = useROS();
+
+// Component refs
+const flightControlsRef = ref()
+const droneGridRef = ref()
+
+// Connect components when mounted
+onMounted(() => {
+  // Wait for components to be available
+  setTimeout(() => {
+    if (droneGridRef.value && flightControlsRef.value) {
+      // Set the FlightControls reference in DroneGrid
+      droneGridRef.value.flightControlsRef = flightControlsRef.value
+      console.log('Connected FlightControls and DroneGrid components')
+    }
+  }, 100)
+})
 
 // DEXI LED Ring colors from DroneBlocks node-red-dexi
 const dexiLEDColors = {
@@ -109,4 +123,4 @@ input[type="range"]::-moz-range-thumb {
   border-radius: 50%;
   cursor: pointer;
 }
-</style>
+</style> 
