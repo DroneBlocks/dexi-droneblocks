@@ -18,7 +18,7 @@
                     </div>
                 </NuxtLink>
 
-                <NuxtLink class="w-60 rounded overflow-hidden shadow-lg bg-primary-content hover:bg-info pt-5 pb-5" :to="`http://${hostname}:1880`" target="_blank">
+                <NuxtLink class="w-60 rounded overflow-hidden shadow-lg bg-primary-content hover:bg-info pt-5 pb-5" :to="`/nodered`" target="_blank">
                     <div class="px-4">
                         <div class="font-bold text-xl mb-2">Node-RED</div>
                         <p class="text-gray-700 text-base">
@@ -27,7 +27,7 @@
                     </div>
                 </NuxtLink>
 
-                <NuxtLink class="w-60 rounded overflow-hidden shadow-lg bg-primary-content hover:bg-info pt-5 pb-5" :to="`http://${hostname}:9999`" target="_blank">
+                <NuxtLink class="w-60 rounded overflow-hidden shadow-lg bg-primary-content hover:bg-info pt-5 pb-5" :to="`/vscode`" target="_blank">
                     <div class="px-4">
                         <div class="font-bold text-xl mb-2">VS Code Server</div>
                         <p class="text-gray-700 text-base">
