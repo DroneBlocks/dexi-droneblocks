@@ -45,6 +45,7 @@
                     </div>
                 </NuxtLink>
 
+
                 <NuxtLink class="w-60 rounded overflow-hidden shadow-lg bg-primary-content hover:bg-info pt-5 pb-5" to="/services">
                     <div class="px-4">
                         <div class="font-bold text-xl mb-2">Service Browser</div>
@@ -76,7 +77,7 @@
 
             <div class="flex items-center justify-center mt-10">
             
-                <div><a href="https://github.com/DroneBlocks/dexi-os/releases/tag/v0.09" target="_blank">DEXI-OS v0.09</a></div>
+                <div><a href="https://github.com/DroneBlocks/dexi-os/releases/tag/v0.10" target="_blank">DEXI-OS v0.10</a></div>
 
             </div>
         </div>
