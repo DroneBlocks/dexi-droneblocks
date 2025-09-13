@@ -21,13 +21,12 @@
       >
         Takeoff Mode
       </button>
-      <button 
-        @click="startOffboardMode" 
-        :disabled="isOffboardActive"
+      <button
+        @click="toggleOffboardMode"
         class="px-3 py-1.5 text-sm rounded-lg"
-        :class="isOffboardActive ? 'bg-green-600' : 'bg-blue-600 hover:bg-blue-700'"
+        :class="isOffboardActive ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'"
       >
-        {{ isOffboardActive ? 'Offboard Active' : 'Offboard Mode' }}
+        {{ isOffboardActive ? 'Disable Offboard' : 'Offboard Mode' }}
       </button>
 
       <!-- Arm Button -->
@@ -286,17 +285,35 @@ const publishLocalPosition = (x: number, y: number, z: number = -1.0, yaw: numbe
 }
 
 // Offboard mode functions
+const toggleOffboardMode = () => {
+  if (isOffboardActive.value) {
+    stopOffboardMode()
+  } else {
+    startOffboardMode()
+  }
+}
+
 const startOffboardMode = () => {
   if (isOffboardActive.value) return
 
   console.log('Starting offboard mode')
   isOffboardActive.value = true
 
-  // Set flight mode to offboard
-  setMode(14) // OFFBOARD mode
-
-  // Start publishing offboard heartbeat
+  // Start publishing offboard heartbeat first
   startOffboardHeartbeat()
+
+  // Wait 1 second, then set flight mode to offboard
+  setTimeout(() => {
+    sendCommand(176, 1, 6) // MAV_CMD_DO_SET_MODE with custom mode enabled, offboard
+    console.log('Switching to offboard mode after heartbeat delay')
+  }, 1000)
+}
+
+const stopOffboardMode = () => {
+  if (!isOffboardActive.value) return
+
+  console.log('Stopping offboard heartbeat - PX4 will automatically exit offboard')
+  stopOffboardHeartbeat()
 }
 
 const startOffboardHeartbeat = () => {

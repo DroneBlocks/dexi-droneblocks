@@ -4,9 +4,11 @@
       <DroneGrid />
     </FlightControls>
   </div> -->
-  <div>
-    <FlightControls />
-    <GCSLayout />
+  <div class="flex flex-col h-screen overflow-hidden">
+    <FlightControls class="shrink-0" />
+    <div class="flex-1 min-h-0">
+      <GCSLayout />
+    </div>
   </div>
 </template>
 

@@ -47,15 +47,9 @@
             <div class="bg-gray-700 rounded-lg p-4">
               <h4 class="text-lg font-medium text-white mb-2">Available Services</h4>
               <div class="space-y-2">
-                <div v-for="service in services" :key="service" 
+                <div v-for="service in services" :key="service"
                      class="flex items-center justify-between p-2 bg-gray-600 rounded">
                   <span class="text-gray-200 font-mono text-sm">{{ service }}</span>
-                  <button 
-                    @click="callService(service)"
-                    class="px-3 py-1 text-xs bg-blue-600 rounded hover:bg-blue-700"
-                  >
-                    Call
-                  </button>
                 </div>
               </div>
             </div>
@@ -119,14 +113,14 @@ const ros = new ROSLIB.Ros({
   url: getROSURL()
 })
 
-const activeTab = ref('services')
+const activeTab = ref('topics')
 const services = ref([])
 const topics = ref([])
 const topicSubscriptions = new Map()
 
 const tabs = [
-  { id: 'services', name: 'Services' },
-  { id: 'topics', name: 'Topics' }
+  { id: 'topics', name: 'Topics' },
+  { id: 'services', name: 'Services' }
 ]
 
 const close = () => {

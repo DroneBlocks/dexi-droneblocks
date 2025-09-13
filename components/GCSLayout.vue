@@ -1,12 +1,40 @@
 <template>
-  <div class="flex flex-col h-screen">
+  <div class="flex flex-col h-full">
     <MainMenu />
     <!-- Main Content -->
     <div class="flex-1 flex">
-      <!-- Main Content Area -->
-      <div class="flex-1 bg-black relative">
-        <div class="p-4 h-full">
-          <CameraFeed :should-invert="true" />
+      <!-- Main Content Area with Tabs -->
+      <div class="flex-1 bg-black relative flex flex-col">
+        <!-- Tab Navigation -->
+        <div class="bg-gray-800 border-b border-gray-700">
+          <nav class="flex space-x-8 px-4">
+            <button
+              v-for="tab in tabs"
+              :key="tab.id"
+              @click="activeTab = tab.id"
+              class="py-3 px-1 text-sm font-medium border-b-2 transition-colors"
+              :class="[
+                activeTab === tab.id
+                  ? 'text-blue-400 border-blue-400'
+                  : 'text-gray-400 hover:text-gray-300 border-transparent'
+              ]"
+            >
+              {{ tab.name }}
+            </button>
+          </nav>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="flex-1 relative">
+          <!-- Camera Tab -->
+          <div v-if="activeTab === 'camera'" class="p-4 h-full">
+            <CameraFeed :should-invert="true" />
+          </div>
+
+          <!-- Map Tab -->
+          <div v-if="activeTab === 'map'" class="h-full">
+            <DroneGrid ref="droneGridRef" />
+          </div>
         </div>
       </div>
 
@@ -27,22 +55,28 @@
       </div>
     </div>
 
-    <!-- Drone Grid Section -->
-    <div class="bg-gray-800">
-      <DroneGrid />
-    </div>
   </div>
 </template>
 
 <script setup>
 import ROSLIB from 'roslib';
 import { useROS } from '~/composables/useROS';
+import { ref } from 'vue';
 import CameraFeed from '~/components/CameraFeed.vue';
 import ServoPanel from '~/components/ServoPanel.vue';
 import MainMenu from '~/components/MainMenu.vue';
 import DroneGrid from '~/components/DroneGrid.vue';
 
 const { getROSURL } = useROS();
+
+// Tab management
+const activeTab = ref('camera');
+const droneGridRef = ref();
+
+const tabs = [
+  { id: 'camera', name: 'Camera' },
+  { id: 'map', name: 'Map' }
+];
 
 // DEXI LED Ring colors from DroneBlocks node-red-dexi
 const dexiLEDColors = {

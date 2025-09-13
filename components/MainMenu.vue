@@ -41,17 +41,17 @@
           >
             ROS Debug Panel
           </button>
-          <button 
+          <button
             class="w-full text-left py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors"
-            @click="selectItem('Settings')"
+            @click="openGitHub"
           >
-            Settings
+            GitHub
           </button>
-          <button 
+          <button
             class="w-full text-left py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors"
-            @click="selectItem('Help')"
+            @click="openDiscord"
           >
-            Help
+            Discord
           </button>
         </nav>
       </div>
@@ -79,8 +79,13 @@ import ROSDebugPanel from './ROSDebugPanel.vue'
 const isOpen = ref(false)
 const showDebugPanel = ref(false)
 
-const selectItem = (item) => {
-  console.log(`Selected: ${item}`)
+const openGitHub = () => {
+  window.open('https://github.com/droneblocks', '_blank')
+  isOpen.value = false
+}
+
+const openDiscord = () => {
+  window.open('https://discord.gg/Wjw7wGf7Wn', '_blank')
   isOpen.value = false
 }
 </script> 
