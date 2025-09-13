@@ -105,8 +105,12 @@ let odometryTopic: ROSLIB.Topic | null = null
 // Add command publisher
 let commandTopic: ROSLIB.Topic | null = null
 
-// Get reference to FlightControls component (will be provided by parent)
-const flightControlsRef = ref()
+// Get reference to FlightControls component from props
+const props = defineProps({
+  flightControlsRef: {
+    required: true
+  }
+})
 
 onMounted(() => {
   // Subscribe to odometry topic
@@ -171,18 +175,18 @@ const handleGridClick = (event: MouseEvent) => {
   const nedY = gridY
   
   // Use FlightControls component's publishLocalPosition function if available
-  if (flightControlsRef.value && flightControlsRef.value.publishLocalPosition) {
-    flightControlsRef.value.publishLocalPosition(nedX, nedY, -1.0, 0)
-    console.log(`Using FlightControls to send drone to local position: x=${nedX.toFixed(2)}m, y=${nedY.toFixed(2)}m, z=-1.0m`)
-  } else {
-    console.warn('FlightControls component not available, cannot send trajectory setpoint')
-  }
+  // TEMPORARILY COMMENTED OUT - DO NOT SEND COMMANDS TO DRONE ON CLICK
+  // if (props.flightControlsRef && props.flightControlsRef.publishLocalPosition) {
+  //   props.flightControlsRef.publishLocalPosition(nedX, nedY, -1.0, 0)
+  //   console.log(`Using FlightControls to send drone to local position: x=${nedX.toFixed(2)}m, y=${nedY.toFixed(2)}m, z=-1.0m`)
+  // } else {
+  //   console.warn('FlightControls component not available, cannot send trajectory setpoint')
+  // }
+
+  console.log(`Map clicked at: x=${nedX.toFixed(2)}m, y=${nedY.toFixed(2)}m (commands disabled)`);
 }
 
-// Expose the ref for parent components to set
-defineExpose({
-  flightControlsRef
-})
+// No longer need to expose flightControlsRef since it comes from props
 </script>
 
 <style scoped>

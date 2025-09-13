@@ -1,6 +1,6 @@
 <template>
   <div class="flex flex-col h-full">
-    <MainMenu />
+    <MainMenu ref="mainMenuRef" />
     <!-- Main Content -->
     <div class="flex-1 flex">
       <!-- Main Content Area with Tabs -->
@@ -28,12 +28,12 @@
         <div class="flex-1 relative">
           <!-- Camera Tab -->
           <div v-if="activeTab === 'camera'" class="p-4 h-full">
-            <CameraFeed :should-invert="true" />
+            <CameraFeed :should-invert="mainMenuRef?.cameraInverted || true" />
           </div>
 
           <!-- Map Tab -->
           <div v-if="activeTab === 'map'" class="h-full">
-            <DroneGrid ref="droneGridRef" />
+            <DroneGrid ref="droneGridRef" :flight-controls-ref="flightControlsRef" />
           </div>
         </div>
       </div>
@@ -67,11 +67,18 @@ import ServoPanel from '~/components/ServoPanel.vue';
 import MainMenu from '~/components/MainMenu.vue';
 import DroneGrid from '~/components/DroneGrid.vue';
 
+const props = defineProps({
+  flightControlsRef: {
+    required: true
+  }
+})
+
 const { getROSURL } = useROS();
 
 // Tab management
 const activeTab = ref('camera');
 const droneGridRef = ref();
+const mainMenuRef = ref();
 
 const tabs = [
   { id: 'camera', name: 'Camera' },
