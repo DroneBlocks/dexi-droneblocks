@@ -35,12 +35,13 @@
     >
       <div class="pt-16 px-4">
         <nav class="space-y-4">
-          <button
-            class="w-full text-left py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors"
-            @click="showDebugPanel = true; isOpen = false"
+          <NuxtLink
+            to="/"
+            class="w-full text-left py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors block"
+            @click="isOpen = false"
           >
-            ROS Debug Panel
-          </button>
+            Dashboard
+          </NuxtLink>
           <button
             class="w-full text-left py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors"
             @click="toggleCameraRotation"
@@ -70,20 +71,13 @@
       @click="isOpen = false"
     ></div>
 
-    <!-- ROS Debug Panel -->
-    <ROSDebugPanel 
-      :is-open="showDebugPanel"
-      @close="showDebugPanel = false"
-    />
   </div>
 </template>
 
 <script setup>
 import { ref } from 'vue'
-import ROSDebugPanel from './ROSDebugPanel.vue'
 
 const isOpen = ref(false)
-const showDebugPanel = ref(false)
 const cameraInverted = ref(true) // Default matches current GCSLayout setting
 
 const openGitHub = () => {

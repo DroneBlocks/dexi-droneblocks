@@ -7,7 +7,9 @@
       class="camera-feed"
       :style="{ transform: shouldInvert ? 'rotate(180deg)' : 'none' }"
     />
-    <p v-else>Loading image...</p>
+    <div v-else class="flex items-center justify-center h-full">
+      <p class="text-gray-400 text-xl font-semibold">Loading image...</p>
+    </div>
   </div>
 </template>
 
