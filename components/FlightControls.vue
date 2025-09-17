@@ -15,9 +15,10 @@
       >
         Position Mode
       </button>
-      <button 
-        @click="setMode(17)" 
+      <button
+        @click="setMode(17)"
         class="px-3 py-1.5 text-sm bg-blue-600 rounded-lg hover:bg-blue-700"
+        style="display: none"
       >
         Takeoff Mode
       </button>
@@ -25,6 +26,7 @@
         @click="toggleOffboardMode"
         class="px-3 py-1.5 text-sm rounded-lg"
         :class="isOffboardActive ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'"
+        style="display: none"
       >
         {{ isOffboardActive ? 'Disable Offboard' : 'Offboard Mode' }}
       </button>
@@ -40,10 +42,11 @@
       </button>
 
       <!-- Move Forward Button -->
-      <button 
-        @click="moveForward" 
+      <button
+        @click="moveForward"
         :disabled="!isFlying"
         class="px-3 py-1.5 text-sm bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50"
+        style="display: none"
       >
         Move Forward 3m
       </button>
@@ -74,6 +77,7 @@ const ros = new ROSLIB.Ros({
 
 // State
 const flightMode = ref('Unknown')
+const navState = ref('N/A')
 const isArmed = ref(false)
 const isFlying = ref(false)
 const isOffboardActive = ref(false)
@@ -90,6 +94,11 @@ let trajectorySetpointTopic: ROSLIB.Topic | null = null
 
 // Offboard heartbeat timer
 let offboardHeartbeatTimer: NodeJS.Timeout | null = null
+
+// Vehicle status topic fallback logic
+let vehicleStatusFallbackTimer: NodeJS.Timeout | null = null
+let hasReceivedVehicleStatus = false
+let usingFallbackTopic = false
 
 // Flight mode mapping
 const flightModes: { [key: number]: string } = {
@@ -138,26 +147,16 @@ interface VehicleCommand {
 }
 
 onMounted(() => {
-  // Subscribe to vehicle status
-  vehicleStatusTopic = new ROSLIB.Topic({
-    ros: ros,
-    name: '/fmu/out/vehicle_status',
-    messageType: 'px4_msgs/msg/VehicleStatus'
-  })
+  // Start with primary vehicle status topic
+  subscribeToVehicleStatus('/fmu/out/vehicle_status')
 
-  vehicleStatusTopic.subscribe((message: any) => {
-    // console.log('Vehicle Status:', {
-    //   nav_state: message.nav_state,
-    //   arming_state: message.arming_state,
-    //   flight_mode: flightModes[message.nav_state] || 'Unknown',
-    //   is_armed: message.arming_state === 2,
-    //   is_flying: message.nav_state !== 18 && message.nav_state !== 13
-    // })
-    
-    flightMode.value = flightModes[message.nav_state] || 'Unknown'
-    isArmed.value = message.arming_state === 2 // 2 = ARMED
-    isFlying.value = message.nav_state !== 18 && message.nav_state !== 13
-  })
+  // Set up fallback timer - if no messages received in 3 seconds, try fallback topic
+  vehicleStatusFallbackTimer = setTimeout(() => {
+    if (!hasReceivedVehicleStatus && !usingFallbackTopic) {
+      console.log('No messages from /fmu/out/vehicle_status, trying /fmu/out/vehicle_status_v1')
+      subscribeToVehicleStatus('/fmu/out/vehicle_status_v1', true)
+    }
+  }, 3000)
 
   // Initialize command publisher
   vehicleCommandTopic = new ROSLIB.Topic({
@@ -192,9 +191,49 @@ onBeforeUnmount(() => {
   if (vehicleStatusTopic) {
     vehicleStatusTopic.unsubscribe()
   }
+  if (vehicleStatusFallbackTimer) {
+    clearTimeout(vehicleStatusFallbackTimer)
+  }
   // Stop offboard heartbeat if active
   stopOffboardHeartbeat()
 })
+
+// Vehicle status subscription function with fallback logic
+const subscribeToVehicleStatus = (topicName: string, isFallback: boolean = false) => {
+  // Unsubscribe from existing topic if any
+  if (vehicleStatusTopic) {
+    vehicleStatusTopic.unsubscribe()
+  }
+
+  console.log(`Subscribing to vehicle status topic: ${topicName}`)
+
+  vehicleStatusTopic = new ROSLIB.Topic({
+    ros: ros,
+    name: topicName,
+    messageType: 'px4_msgs/msg/VehicleStatus'
+  })
+
+  vehicleStatusTopic.subscribe((message: any) => {
+    // Mark that we've received a message
+    hasReceivedVehicleStatus = true
+    if (isFallback) {
+      usingFallbackTopic = true
+      console.log(`Successfully receiving messages from fallback topic: ${topicName}`)
+    }
+
+    // Clear fallback timer since we're receiving messages
+    if (vehicleStatusFallbackTimer) {
+      clearTimeout(vehicleStatusFallbackTimer)
+      vehicleStatusFallbackTimer = null
+    }
+
+    // Process the vehicle status message
+    navState.value = message.nav_state
+    flightMode.value = flightModes[message.nav_state] || 'Unknown'
+    isArmed.value = message.arming_state === 2 // 2 = ARMED
+    isFlying.value = message.nav_state !== 18 && message.nav_state !== 13
+  })
+}
 
 // Command functions
 const sendCommand = (command: number, param1: number = 0, param2: number = 0, param3: number = 0, param4: number = 0, param5: number = 0, param6: number = 0, param7: number = 0) => {

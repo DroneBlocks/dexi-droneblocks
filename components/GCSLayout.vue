@@ -28,7 +28,7 @@
         <div class="flex-1 relative">
           <!-- Camera Tab -->
           <div v-if="activeTab === 'camera'" class="p-4 h-full">
-            <CameraFeed :should-invert="mainMenuRef?.cameraInverted || true" />
+            <CameraFeed :should-invert="mainMenuRef?.cameraInverted ?? true" />
           </div>
 
           <!-- Map Tab -->

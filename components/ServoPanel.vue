@@ -2,7 +2,7 @@
   <div>
     <h3 class="text-lg font-bold mb-2">DEXI Servos</h3>
     <div class="space-y-4">
-      <div v-for="servo in servos" :key="servo.channel_num" class="space-y-1">
+      <div v-for="servo in servos" :key="servo.pin" class="space-y-1">
         <div class="flex justify-between text-sm">
           <span>{{ servo.label }}</span>
           <span>{{ servo.angle }}°</span>
@@ -36,23 +36,23 @@ const ros = new ROSLIB.Ros({
 // Create Servo service client
 const servoService = new ROSLIB.Service({
   ros: ros,
-  name: '/pca9685/set_pwm',
-  serviceType: 'ros2_pca9685/srv/SetPwm'
+  name: '/dexi/servo_control',
+  serviceType: 'dexi_interfaces/srv/ServoControl'
 });
 
-// Servo configuration - using PCA9685 channels (0-15 typically)
+// Servo configuration - using pin numbers for dexi servo control
 const servos = ref([
-  { label: 'Servo 1', channel_num: 0, angle: 90 },
-  { label: 'Servo 2', channel_num: 1, angle: 90 },
-  { label: 'Servo 3', channel_num: 2, angle: 90 },
-  { label: 'Servo 4', channel_num: 3, angle: 90 },
-  { label: 'Servo 5', channel_num: 4, angle: 90 }
+  { label: 'Servo 1', pin: 0, angle: 90 },
+  { label: 'Servo 2', pin: 1, angle: 90 },
+  { label: 'Servo 3', pin: 2, angle: 90 },
+  { label: 'Servo 4', pin: 3, angle: 90 },
+  { label: 'Servo 5', pin: 4, angle: 90 }
 ]);
 
 const setServoAngle = (servo) => {
   const request = new ROSLIB.ServiceRequest({
-    channel_num: servo.channel_num,
-    target_position: Number(servo.angle) // Convert to number, service expects degrees
+    pin: servo.pin,
+    angle: Number(servo.angle)
   });
 
   servoService.callService(request, (result) => {
