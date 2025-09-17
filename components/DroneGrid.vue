@@ -1,5 +1,5 @@
 <template>
-  <div class="relative w-full h-full bg-gray-800 p-4">
+  <div class="relative w-full h-full bg-gray-800 p-4 flex-1">
     <!-- Position Display Widget -->
     <div class="absolute top-4 right-4 bg-gray-900/80 text-white p-3 rounded-lg shadow-lg z-10">
       <div class="text-sm font-mono space-y-1">
@@ -55,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount, inject, defineExpose } from 'vue'
 import ROSLIB from 'roslib'
 import { useROS } from '~/composables/useROS'
 
@@ -82,28 +82,6 @@ interface VehicleCommand {
   from_external: boolean
 }
 
-interface PositionSetpoint {
-  timestamp: number
-  valid: boolean
-  type: number
-  vx: number
-  vy: number
-  vz: number
-  lat: number
-  lon: number
-  alt: number
-  yaw: number
-  loiter_radius: number
-  loiter_minor_radius: number
-  loiter_direction_counter_clockwise: boolean
-  loiter_orientation: number
-  loiter_pattern: number
-  acceptance_radius: number
-  cruising_speed: number
-  gliding_enabled: boolean
-  cruising_throttle: number
-}
-
 const { getROSURL } = useROS()
 
 // Initialize ROS connection
@@ -127,8 +105,12 @@ let odometryTopic: ROSLIB.Topic | null = null
 // Add command publisher
 let commandTopic: ROSLIB.Topic | null = null
 
-// Add position setpoint publisher
-let positionSetpointTopic: ROSLIB.Topic | null = null
+// Get reference to FlightControls component from props
+const props = defineProps({
+  flightControlsRef: {
+    required: true
+  }
+})
 
 onMounted(() => {
   // Subscribe to odometry topic
@@ -163,13 +145,6 @@ onMounted(() => {
     name: '/fmu/in/vehicle_command',
     messageType: 'px4_msgs/msg/VehicleCommand'
   })
-
-  // Initialize position setpoint publisher
-  positionSetpointTopic = new ROSLIB.Topic({
-    ros: ros,
-    name: '/fmu/in/position_setpoint',
-    messageType: 'px4_msgs/msg/PositionSetpoint'
-  })
 })
 
 onBeforeUnmount(() => {
@@ -188,38 +163,30 @@ const handleGridClick = (event: MouseEvent) => {
   const relativeY = (rect.bottom - event.clientY) / rect.height
   
   // Convert to grid coordinates (-5 to 5 meters)
-  const gridX = (relativeY * 10) - 5  // Convert to -5 to 5 range
-  const gridY = (relativeX * 10) - 5  // Convert to -5 to 5 range
+  // Fix: Use X mouse position for X coordinate (East) and Y mouse position for Y coordinate (North)
+  const gridX = (relativeX * 10) - 5  // X mouse → X coordinate (East)
+  const gridY = (relativeY * 10) - 5  // Y mouse → Y coordinate (North)
   
-  // Create position setpoint message
-  const setpoint: PositionSetpoint = {
-    timestamp: Date.now() * 1000,
-    valid: true,
-    type: 0, // SETPOINT_TYPE_POSITION
-    vx: gridX,
-    vy: gridY,
-    vz: 0,
-    lat: 0, // Not used in local frame
-    lon: 0, // Not used in local frame
-    alt: 1.0, // 1 meter altitude
-    yaw: 0, // Maintain current yaw
-    loiter_radius: 0,
-    loiter_minor_radius: 0,
-    loiter_direction_counter_clockwise: false,
-    loiter_orientation: 0,
-    loiter_pattern: 0,
-    acceptance_radius: 0.3, // 30cm acceptance radius
-    cruising_speed: 0,
-    gliding_enabled: false,
-    cruising_throttle: 0
-  }
+  // Convert to NED frame for PX4:
+  // - gridX (East) maps to NED X (East) - no change needed
+  // - gridY (North) maps to NED Y (North) - no change needed
+  // - Z is already in NED frame (-1.0 = 1m above ground)
+  const nedX = gridX
+  const nedY = gridY
+  
+  // Use FlightControls component's publishLocalPosition function if available
+  // TEMPORARILY COMMENTED OUT - DO NOT SEND COMMANDS TO DRONE ON CLICK
+  // if (props.flightControlsRef && props.flightControlsRef.publishLocalPosition) {
+  //   props.flightControlsRef.publishLocalPosition(nedX, nedY, -1.0, 0)
+  //   console.log(`Using FlightControls to send drone to local position: x=${nedX.toFixed(2)}m, y=${nedY.toFixed(2)}m, z=-1.0m`)
+  // } else {
+  //   console.warn('FlightControls component not available, cannot send trajectory setpoint')
+  // }
 
-  // Publish the setpoint
-  if (positionSetpointTopic) {
-    positionSetpointTopic.publish(setpoint)
-    console.log(`Sending drone to local position: x=${gridX.toFixed(2)}m, y=${gridY.toFixed(2)}m`)
-  }
+  console.log(`Map clicked at: x=${nedX.toFixed(2)}m, y=${nedY.toFixed(2)}m (commands disabled)`);
 }
+
+// No longer need to expose flightControlsRef since it comes from props
 </script>
 
 <style scoped>

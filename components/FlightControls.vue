@@ -1,81 +1,70 @@
 <template>
-  <div class="flex h-full">
-    <!-- Left side - Controls and Grid -->
-    <div class="w-1/2 flex flex-col">
-      <!-- Controls Section -->
-      <div class="bg-gray-900 text-white p-4">
-        <!-- Flight Mode Display -->
-        <div class="flex items-center space-x-4 mb-4">
-          <span class="text-gray-400">Flight Mode:</span>
-          <span class="font-mono">{{ flightMode }}</span>
-        </div>
-
-        <!-- Control Buttons -->
-        <div class="flex items-center space-x-4">
-          <!-- Mode Buttons -->
-          <button 
-            @click="setMode(2)" 
-            class="px-3 py-1.5 text-sm bg-blue-600 rounded-lg hover:bg-blue-700"
-          >
-            Position Mode
-          </button>
-          <button 
-            @click="setMode(17)" 
-            class="px-3 py-1.5 text-sm bg-blue-600 rounded-lg hover:bg-blue-700"
-          >
-            Takeoff Mode
-          </button>
-
-          <!-- Arm Button -->
-          <button 
-            @click="armDrone" 
-            :disabled="isArmed"
-            class="px-3 py-1.5 text-sm rounded-lg"
-            :class="isArmed ? 'bg-green-600' : 'bg-red-600 hover:bg-red-700'"
-          >
-            {{ isArmed ? 'Armed' : 'Arm' }}
-          </button>
-
-          <!-- Move Forward Button -->
-          <button 
-            @click="moveForward" 
-            :disabled="!isFlying"
-            class="px-3 py-1.5 text-sm bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50"
-          >
-            Move Forward 3m
-          </button>
-
-          <!-- Land Button -->
-          <button 
-            @click="land" 
-            :disabled="!isFlying"
-            class="px-3 py-1.5 text-sm bg-yellow-600 rounded-lg hover:bg-yellow-700 disabled:opacity-50"
-          >
-            Land
-          </button>
-        </div>
-      </div>
-
-      <!-- Drone Grid Section -->
-      <div class="flex-1 bg-gray-800">
-        <slot></slot>
-      </div>
+  <div class="w-full bg-gray-900 text-white p-4">
+    <!-- Flight Mode Display -->
+    <div class="flex items-center space-x-4 mb-4">
+      <span class="text-gray-400">Flight Mode:</span>
+      <span class="font-mono">{{ flightMode }}</span>
     </div>
 
-    <!-- Right side - Unity Container -->
-    <div class="w-1/2 bg-gray-800 p-4">
-      <div class="h-full flex flex-col">
-        <div class="text-white text-lg font-semibold mb-4">Unity Visualization</div>
-        <div class="flex-1 bg-gray-700 rounded-lg flex items-center justify-center">
-          <span class="text-gray-400">Unity WebGL content will be placed here</span>
-        </div>
-      </div>
+    <!-- Control Buttons -->
+    <div class="flex items-center space-x-4">
+      <!-- Mode Buttons -->
+      <button 
+        @click="setMode(2)" 
+        class="px-3 py-1.5 text-sm bg-blue-600 rounded-lg hover:bg-blue-700"
+      >
+        Position Mode
+      </button>
+      <button
+        @click="setMode(17)"
+        class="px-3 py-1.5 text-sm bg-blue-600 rounded-lg hover:bg-blue-700"
+        style="display: none"
+      >
+        Takeoff Mode
+      </button>
+      <button
+        @click="toggleOffboardMode"
+        class="px-3 py-1.5 text-sm rounded-lg"
+        :class="isOffboardActive ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'"
+        style="display: none"
+      >
+        {{ isOffboardActive ? 'Disable Offboard' : 'Offboard Mode' }}
+      </button>
+
+      <!-- Arm Button -->
+      <button 
+        @click="armDrone" 
+        :disabled="isArmed"
+        class="px-3 py-1.5 text-sm rounded-lg"
+        :class="isArmed ? 'bg-green-600' : 'bg-red-600 hover:bg-red-700'"
+      >
+        {{ isArmed ? 'Armed' : 'Arm' }}
+      </button>
+
+      <!-- Move Forward Button -->
+      <button
+        @click="moveForward"
+        :disabled="!isFlying"
+        class="px-3 py-1.5 text-sm bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50"
+        style="display: none"
+      >
+        Move Forward 3m
+      </button>
+
+      <!-- Land Button -->
+      <button 
+        @click="land" 
+        :disabled="!isFlying"
+        class="px-3 py-1.5 text-sm bg-yellow-600 rounded-lg hover:bg-yellow-700 disabled:opacity-50"
+      >
+        Land
+      </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount, defineExpose } from 'vue'
 import ROSLIB from 'roslib'
 import { useROS } from '~/composables/useROS'
 
@@ -88,13 +77,28 @@ const ros = new ROSLIB.Ros({
 
 // State
 const flightMode = ref('Unknown')
+const navState = ref('N/A')
 const isArmed = ref(false)
 const isFlying = ref(false)
+const isOffboardActive = ref(false)
+
+// Offboard target position (reactive so it can be updated by other components)
+const offboardTargetPosition = ref({ x: 0, y: 0, z: -1.0, yaw: 0 })
 
 // Topics
 let vehicleStatusTopic: ROSLIB.Topic | null = null
 let vehicleCommandTopic: ROSLIB.Topic | null = null
 let positionSetpointTopic: ROSLIB.Topic | null = null
+let offboardControlModeTopic: ROSLIB.Topic | null = null
+let trajectorySetpointTopic: ROSLIB.Topic | null = null
+
+// Offboard heartbeat timer
+let offboardHeartbeatTimer: NodeJS.Timeout | null = null
+
+// Vehicle status topic fallback logic
+let vehicleStatusFallbackTimer: NodeJS.Timeout | null = null
+let hasReceivedVehicleStatus = false
+let usingFallbackTopic = false
 
 // Flight mode mapping
 const flightModes: { [key: number]: string } = {
@@ -143,26 +147,16 @@ interface VehicleCommand {
 }
 
 onMounted(() => {
-  // Subscribe to vehicle status
-  vehicleStatusTopic = new ROSLIB.Topic({
-    ros: ros,
-    name: '/fmu/out/vehicle_status',
-    messageType: 'px4_msgs/msg/VehicleStatus'
-  })
+  // Start with primary vehicle status topic
+  subscribeToVehicleStatus('/fmu/out/vehicle_status')
 
-  vehicleStatusTopic.subscribe((message: any) => {
-    // console.log('Vehicle Status:', {
-    //   nav_state: message.nav_state,
-    //   arming_state: message.arming_state,
-    //   flight_mode: flightModes[message.nav_state] || 'Unknown',
-    //   is_armed: message.arming_state === 2,
-    //   is_flying: message.nav_state !== 18 && message.nav_state !== 13
-    // })
-    
-    flightMode.value = flightModes[message.nav_state] || 'Unknown'
-    isArmed.value = message.arming_state === 2 // 2 = ARMED
-    isFlying.value = message.nav_state !== 18 && message.nav_state !== 13
-  })
+  // Set up fallback timer - if no messages received in 3 seconds, try fallback topic
+  vehicleStatusFallbackTimer = setTimeout(() => {
+    if (!hasReceivedVehicleStatus && !usingFallbackTopic) {
+      console.log('No messages from /fmu/out/vehicle_status, trying /fmu/out/vehicle_status_v1')
+      subscribeToVehicleStatus('/fmu/out/vehicle_status_v1', true)
+    }
+  }, 3000)
 
   // Initialize command publisher
   vehicleCommandTopic = new ROSLIB.Topic({
@@ -177,13 +171,69 @@ onMounted(() => {
     name: '/fmu/in/position_setpoint',
     messageType: 'px4_msgs/msg/PositionSetpoint'
   })
+
+  // Initialize offboard control mode publisher
+  offboardControlModeTopic = new ROSLIB.Topic({
+    ros: ros,
+    name: '/fmu/in/offboard_control_mode',
+    messageType: 'px4_msgs/msg/OffboardControlMode'
+  })
+
+  // Initialize trajectory setpoint publisher
+  trajectorySetpointTopic = new ROSLIB.Topic({
+    ros: ros,
+    name: '/fmu/in/trajectory_setpoint',
+    messageType: 'px4_msgs/msg/TrajectorySetpoint'
+  })
 })
 
 onBeforeUnmount(() => {
   if (vehicleStatusTopic) {
     vehicleStatusTopic.unsubscribe()
   }
+  if (vehicleStatusFallbackTimer) {
+    clearTimeout(vehicleStatusFallbackTimer)
+  }
+  // Stop offboard heartbeat if active
+  stopOffboardHeartbeat()
 })
+
+// Vehicle status subscription function with fallback logic
+const subscribeToVehicleStatus = (topicName: string, isFallback: boolean = false) => {
+  // Unsubscribe from existing topic if any
+  if (vehicleStatusTopic) {
+    vehicleStatusTopic.unsubscribe()
+  }
+
+  console.log(`Subscribing to vehicle status topic: ${topicName}`)
+
+  vehicleStatusTopic = new ROSLIB.Topic({
+    ros: ros,
+    name: topicName,
+    messageType: 'px4_msgs/msg/VehicleStatus'
+  })
+
+  vehicleStatusTopic.subscribe((message: any) => {
+    // Mark that we've received a message
+    hasReceivedVehicleStatus = true
+    if (isFallback) {
+      usingFallbackTopic = true
+      console.log(`Successfully receiving messages from fallback topic: ${topicName}`)
+    }
+
+    // Clear fallback timer since we're receiving messages
+    if (vehicleStatusFallbackTimer) {
+      clearTimeout(vehicleStatusFallbackTimer)
+      vehicleStatusFallbackTimer = null
+    }
+
+    // Process the vehicle status message
+    navState.value = message.nav_state
+    flightMode.value = flightModes[message.nav_state] || 'Unknown'
+    isArmed.value = message.arming_state === 2 // 2 = ARMED
+    isFlying.value = message.nav_state !== 18 && message.nav_state !== 13
+  })
+}
 
 // Command functions
 const sendCommand = (command: number, param1: number = 0, param2: number = 0, param3: number = 0, param4: number = 0, param5: number = 0, param6: number = 0, param7: number = 0) => {
@@ -238,31 +288,140 @@ const land = () => {
 }
 
 const moveForward = () => {
-  if (!positionSetpointTopic) return
+  if (!trajectorySetpointTopic) return
 
   const setpoint = {
     timestamp: Date.now() * 1000,
-    valid: true,
-    type: 0, // SETPOINT_TYPE_POSITION
-    vx: 3.0, // Move 3 meters forward in NED frame
-    vy: 0,
-    vz: 0,
-    lat: 0,
-    lon: 0,
-    alt: 0, // Maintain current altitude
-    yaw: 0, // Maintain current yaw
-    loiter_radius: 0,
-    loiter_minor_radius: 0,
-    loiter_direction_counter_clockwise: false,
-    loiter_orientation: 0,
-    loiter_pattern: 0,
-    acceptance_radius: 0.3,
-    cruising_speed: 0,
-    gliding_enabled: false,
-    cruising_throttle: 0
+    position: [3.0, 0, -1.0], // Move 3 meters forward in NED frame (x=3, y=0, z=-1)
+    velocity: [0, 0, 0],
+    acceleration: [0, 0, 0],
+    jerk: [0, 0, 0],
+    yaw: 0
   }
 
-  positionSetpointTopic.publish(setpoint)
-  console.log('Sending move forward command')
+  trajectorySetpointTopic.publish(setpoint)
+  console.log('Sending move forward command using trajectory setpoint')
 }
+
+// Function to publish local coordinates to trajectory setpoint
+const publishLocalPosition = (x: number, y: number, z: number = -1.0, yaw: number = 0) => {
+  if (!trajectorySetpointTopic) return
+
+  // Update the target position for the heartbeat
+  offboardTargetPosition.value = { x, y, z, yaw }
+
+  const setpoint = {
+    timestamp: Date.now() * 1000,
+    position: [x, y, z], // Local coordinates in NED frame
+    velocity: [0, 0, 0],
+    acceleration: [0, 0, 0],
+    jerk: [0, 0, 0],
+    yaw: yaw
+  }
+
+  trajectorySetpointTopic.publish(setpoint)
+  console.log(`Sending trajectory setpoint: x=${x}m, y=${y}m, z=${z}m, yaw=${yaw}°`)
+}
+
+// Offboard mode functions
+const toggleOffboardMode = () => {
+  if (isOffboardActive.value) {
+    stopOffboardMode()
+  } else {
+    startOffboardMode()
+  }
+}
+
+const startOffboardMode = () => {
+  if (isOffboardActive.value) return
+
+  console.log('Starting offboard mode')
+  isOffboardActive.value = true
+
+  // Start publishing offboard heartbeat first
+  startOffboardHeartbeat()
+
+  // Wait 1 second, then set flight mode to offboard
+  setTimeout(() => {
+    sendCommand(176, 1, 6) // MAV_CMD_DO_SET_MODE with custom mode enabled, offboard
+    console.log('Switching to offboard mode after heartbeat delay')
+  }, 1000)
+}
+
+const stopOffboardMode = () => {
+  if (!isOffboardActive.value) return
+
+  console.log('Stopping offboard heartbeat - PX4 will automatically exit offboard')
+  stopOffboardHeartbeat()
+}
+
+const startOffboardHeartbeat = () => {
+  if (!offboardControlModeTopic || !trajectorySetpointTopic) return
+
+  // Publish initial offboard control mode message
+  const offboardControlMode = {
+    timestamp: Date.now() * 1000,
+    position: true,
+    velocity: false,
+    acceleration: false,
+    attitude: false,
+    body_rate: false
+  }
+
+  // Publish initial trajectory setpoint (hold current position)
+  const trajectorySetpoint = {
+    timestamp: Date.now() * 1000,
+    position: [offboardTargetPosition.value.x, offboardTargetPosition.value.y, offboardTargetPosition.value.z],
+    velocity: [0, 0, 0],
+    acceleration: [0, 0, 0],
+    jerk: [0, 0, 0],
+    yaw: offboardTargetPosition.value.yaw
+  }
+
+  offboardControlModeTopic.publish(offboardControlMode)
+  trajectorySetpointTopic.publish(trajectorySetpoint)
+
+  // Start heartbeat timer (publish every 50ms)
+  offboardHeartbeatTimer = setInterval(() => {
+    const timestamp = Date.now() * 1000
+    
+    // Publish offboard control mode heartbeat
+    offboardControlModeTopic.publish({
+      timestamp,
+      position: true,
+      velocity: false,
+      acceleration: false,
+      attitude: false,
+      body_rate: false
+    })
+
+    // Publish trajectory setpoint heartbeat using current target position
+    trajectorySetpointTopic.publish({
+      timestamp,
+      position: [offboardTargetPosition.value.x, offboardTargetPosition.value.y, offboardTargetPosition.value.z],
+      velocity: [0, 0, 0],
+      acceleration: [0, 0, 0],
+      jerk: [0, 0, 0],
+      yaw: offboardTargetPosition.value.yaw
+    })
+  }, 50) // 50ms = 20Hz
+
+  console.log('Offboard heartbeat started')
+}
+
+const stopOffboardHeartbeat = () => {
+  if (offboardHeartbeatTimer) {
+    clearInterval(offboardHeartbeatTimer)
+    offboardHeartbeatTimer = null
+    isOffboardActive.value = false
+    console.log('Offboard heartbeat stopped')
+  }
+}
+
+// Expose functions and state for other components
+defineExpose({
+  publishLocalPosition,
+  isOffboardActive,
+  offboardTargetPosition
+})
 </script> 
