@@ -50,6 +50,12 @@
           </button>
           <button
             class="w-full text-left py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors"
+            @click="openKeyboardControl"
+          >
+            Keyboard Control
+          </button>
+          <button
+            class="w-full text-left py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors"
             @click="openGitHub"
           >
             GitHub
@@ -92,6 +98,13 @@ const openDiscord = () => {
 
 const toggleCameraRotation = () => {
   cameraInverted.value = !cameraInverted.value
+  isOpen.value = false
+}
+
+const emit = defineEmits(['open-keyboard-control'])
+
+const openKeyboardControl = () => {
+  emit('open-keyboard-control')
   isOpen.value = false
 }
 
