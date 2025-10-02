@@ -269,7 +269,12 @@ const stopDrag = () => {
 }
 
 const close = () => {
-  isActive.value = false
+  // Stop keyboard control and heartbeat when closing the widget
+  if (isActive.value) {
+    sendCommand('stop_offboard_heartbeat')
+    console.log('Stopping offboard heartbeat on widget close')
+    isActive.value = false
+  }
   emit('close')
 }
 
