@@ -5,7 +5,13 @@ export const useROS = () => {
     return `ws://${hostname}:9090`
   }
 
+  const isDevMode = (): boolean => {
+    // Check if we're in development mode
+    return process.env.NODE_ENV === 'development'
+  }
+
   return {
-    getROSURL
+    getROSURL,
+    isDevMode
   }
 }

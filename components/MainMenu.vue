@@ -90,7 +90,7 @@ const isOpen = ref(false)
 const cameraInverted = ref(true) // Default matches current GCSLayout setting
 const keyboardControlAvailable = ref(false)
 
-const { getROSURL } = useROS()
+const { getROSURL, isDevMode } = useROS()
 
 const openGitHub = () => {
   window.open('https://github.com/droneblocks', '_blank')
@@ -115,6 +115,12 @@ const openKeyboardControl = () => {
 }
 
 const checkKeyboardControlAvailability = () => {
+  // In dev mode, always enable keyboard control for UI testing
+  if (isDevMode()) {
+    keyboardControlAvailable.value = true
+    return
+  }
+
   try {
     const ros = new ROSLIB.Ros({
       url: getROSURL()

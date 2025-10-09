@@ -56,38 +56,53 @@
         <!-- Quick Key Reference -->
         <div class="text-xs">
           <div class="font-medium mb-2">Controls:</div>
-          <div class="space-y-1">
-            <div class="flex justify-between">
-              <span class="font-mono bg-gray-700 px-1 rounded">W</span>
-              <span class="text-gray-300">Fly Up</span>
+          <div class="grid grid-cols-2 gap-[50px]">
+            <!-- Left Column: T W S A D -->
+            <div class="space-y-1">
+              <div class="flex justify-between">
+                <span class="font-mono bg-gray-700 px-1 rounded">T</span>
+                <span class="text-gray-300">Takeoff</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="font-mono bg-gray-700 px-1 rounded">W</span>
+                <span class="text-gray-300">Fly Up</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="font-mono bg-gray-700 px-1 rounded">S</span>
+                <span class="text-gray-300">Fly Down</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="font-mono bg-gray-700 px-1 rounded">A</span>
+                <span class="text-gray-300">Yaw Left</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="font-mono bg-gray-700 px-1 rounded">D</span>
+                <span class="text-gray-300">Yaw Right</span>
+              </div>
             </div>
-            <div class="flex justify-between">
-              <span class="font-mono bg-gray-700 px-1 rounded">S</span>
-              <span class="text-gray-300">Fly Down</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="font-mono bg-gray-700 px-1 rounded">A</span>
-              <span class="text-gray-300">Yaw Left</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="font-mono bg-gray-700 px-1 rounded">D</span>
-              <span class="text-gray-300">Yaw Right</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="font-mono bg-gray-700 px-1 rounded">↑</span>
-              <span class="text-gray-300">Fly Forward</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="font-mono bg-gray-700 px-1 rounded">↓</span>
-              <span class="text-gray-300">Fly Backward</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="font-mono bg-gray-700 px-1 rounded">←</span>
-              <span class="text-gray-300">Fly Left</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="font-mono bg-gray-700 px-1 rounded">→</span>
-              <span class="text-gray-300">Fly Right</span>
+
+            <!-- Right Column: L and Arrows -->
+            <div class="space-y-1">
+              <div class="flex justify-between">
+                <span class="font-mono bg-gray-700 px-1 rounded">L</span>
+                <span class="text-gray-300">Land</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="font-mono bg-gray-700 px-1 rounded">↑</span>
+                <span class="text-gray-300">Forward</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="font-mono bg-gray-700 px-1 rounded">↓</span>
+                <span class="text-gray-300">Backward</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="font-mono bg-gray-700 px-1 rounded">←</span>
+                <span class="text-gray-300">Fly Left</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="font-mono bg-gray-700 px-1 rounded">→</span>
+                <span class="text-gray-300">Fly Right</span>
+              </div>
             </div>
           </div>
         </div>
@@ -152,7 +167,13 @@ const keyMappings = {
   'ArrowUp': { command: 'fly_forward', distance_or_degrees: 1.0 },
   'ArrowDown': { command: 'fly_backward', distance_or_degrees: 1.0 },
   'ArrowLeft': { command: 'fly_left', distance_or_degrees: 1.0 },
-  'ArrowRight': { command: 'fly_right', distance_or_degrees: 1.0 }
+  'ArrowRight': { command: 'fly_right', distance_or_degrees: 1.0 },
+
+  // Takeoff and Land
+  't': { command: 'fly_up', distance_or_degrees: 1.0 },
+  'T': { command: 'fly_up', distance_or_degrees: 1.0 },
+  'l': { command: 'land', distance_or_degrees: 0.0 },
+  'L': { command: 'land', distance_or_degrees: 0.0 }
 }
 
 const initializeROS = () => {
@@ -211,6 +232,14 @@ const handleKeyPress = (event) => {
 
   if (mapping) {
     event.preventDefault()
+
+    // Special handling for land command - stop heartbeat first
+    if (key === 'l' || key === 'L') {
+      sendCommand('stop_offboard_heartbeat')
+      console.log('Stopping offboard heartbeat before landing')
+      isActive.value = false
+    }
+
     sendCommand(mapping.command, mapping.distance_or_degrees)
   }
 }
