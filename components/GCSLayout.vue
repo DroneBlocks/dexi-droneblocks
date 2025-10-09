@@ -1,6 +1,6 @@
 <template>
   <div class="flex flex-col h-full">
-    <MainMenu ref="mainMenuRef" />
+    <MainMenu ref="mainMenuRef" @open-keyboard-control="showKeyboardControl = true" />
     <!-- Main Content -->
     <div class="flex-1 flex">
       <!-- Main Content Area with Tabs -->
@@ -35,6 +35,7 @@
           <div v-if="activeTab === 'map'" class="h-full">
             <DroneGrid ref="droneGridRef" :flight-controls-ref="flightControlsRef" />
           </div>
+
         </div>
       </div>
 
@@ -55,6 +56,9 @@
       </div>
     </div>
 
+    <!-- Keyboard Control Modal -->
+    <KeyboardControl :is-open="showKeyboardControl" @close="showKeyboardControl = false" />
+
   </div>
 </template>
 
@@ -66,6 +70,7 @@ import CameraFeed from '~/components/CameraFeed.vue';
 import ServoPanel from '~/components/ServoPanel.vue';
 import MainMenu from '~/components/MainMenu.vue';
 import DroneGrid from '~/components/DroneGrid.vue';
+import KeyboardControl from '~/components/KeyboardControl.vue';
 
 const props = defineProps({
   flightControlsRef: {
@@ -79,6 +84,9 @@ const { getROSURL } = useROS();
 const activeTab = ref('camera');
 const droneGridRef = ref();
 const mainMenuRef = ref();
+
+// Keyboard control modal
+const showKeyboardControl = ref(false);
 
 const tabs = [
   { id: 'camera', name: 'Camera' },

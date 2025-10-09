@@ -49,6 +49,13 @@
             Rotate Camera
           </button>
           <button
+            v-if="keyboardControlAvailable"
+            class="w-full text-left py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors"
+            @click="openKeyboardControl"
+          >
+            Keyboard Control
+          </button>
+          <button
             class="w-full text-left py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors"
             @click="openGitHub"
           >
@@ -75,10 +82,15 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import ROSLIB from 'roslib'
+import { useROS } from '~/composables/useROS'
 
 const isOpen = ref(false)
 const cameraInverted = ref(true) // Default matches current GCSLayout setting
+const keyboardControlAvailable = ref(false)
+
+const { getROSURL, isDevMode } = useROS()
 
 const openGitHub = () => {
   window.open('https://github.com/droneblocks', '_blank')
@@ -94,6 +106,52 @@ const toggleCameraRotation = () => {
   cameraInverted.value = !cameraInverted.value
   isOpen.value = false
 }
+
+const emit = defineEmits(['open-keyboard-control'])
+
+const openKeyboardControl = () => {
+  emit('open-keyboard-control')
+  isOpen.value = false
+}
+
+const checkKeyboardControlAvailability = () => {
+  // In dev mode, always enable keyboard control for UI testing
+  if (isDevMode()) {
+    keyboardControlAvailable.value = true
+    return
+  }
+
+  try {
+    const ros = new ROSLIB.Ros({
+      url: getROSURL()
+    })
+
+    ros.on('connection', () => {
+      const paramClient = new ROSLIB.Param({
+        ros: ros,
+        name: '/dexi/px4_offboard_manager:keyboard_control_enabled'
+      })
+
+      paramClient.get((value) => {
+        keyboardControlAvailable.value = value === true
+        ros.close()
+      }, (error) => {
+        keyboardControlAvailable.value = false
+        ros.close()
+      })
+    })
+
+    ros.on('error', () => {
+      keyboardControlAvailable.value = false
+    })
+  } catch (error) {
+    keyboardControlAvailable.value = false
+  }
+}
+
+onMounted(() => {
+  checkKeyboardControlAvailability()
+})
 
 defineExpose({
   cameraInverted

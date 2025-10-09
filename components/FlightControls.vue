@@ -88,12 +88,7 @@ const offboardTargetPosition = ref({ x: 0, y: 0, z: -1.0, yaw: 0 })
 // Topics
 let vehicleStatusTopic: ROSLIB.Topic | null = null
 let vehicleCommandTopic: ROSLIB.Topic | null = null
-let positionSetpointTopic: ROSLIB.Topic | null = null
-let offboardControlModeTopic: ROSLIB.Topic | null = null
-let trajectorySetpointTopic: ROSLIB.Topic | null = null
-
-// Offboard heartbeat timer
-let offboardHeartbeatTimer: NodeJS.Timeout | null = null
+let offboardManagerTopic: ROSLIB.Topic | null = null
 
 // Vehicle status topic fallback logic
 let vehicleStatusFallbackTimer: NodeJS.Timeout | null = null
@@ -158,32 +153,18 @@ onMounted(() => {
     }
   }, 3000)
 
-  // Initialize command publisher
+  // Initialize command publisher for direct PX4 commands
   vehicleCommandTopic = new ROSLIB.Topic({
     ros: ros,
     name: '/fmu/in/vehicle_command',
     messageType: 'px4_msgs/msg/VehicleCommand'
   })
 
-  // Initialize position setpoint publisher
-  positionSetpointTopic = new ROSLIB.Topic({
+  // Initialize offboard manager command publisher
+  offboardManagerTopic = new ROSLIB.Topic({
     ros: ros,
-    name: '/fmu/in/position_setpoint',
-    messageType: 'px4_msgs/msg/PositionSetpoint'
-  })
-
-  // Initialize offboard control mode publisher
-  offboardControlModeTopic = new ROSLIB.Topic({
-    ros: ros,
-    name: '/fmu/in/offboard_control_mode',
-    messageType: 'px4_msgs/msg/OffboardControlMode'
-  })
-
-  // Initialize trajectory setpoint publisher
-  trajectorySetpointTopic = new ROSLIB.Topic({
-    ros: ros,
-    name: '/fmu/in/trajectory_setpoint',
-    messageType: 'px4_msgs/msg/TrajectorySetpoint'
+    name: '/dexi/offboard_manager',
+    messageType: 'dexi_interfaces/msg/OffboardNavCommand'
   })
 })
 
@@ -194,8 +175,10 @@ onBeforeUnmount(() => {
   if (vehicleStatusFallbackTimer) {
     clearTimeout(vehicleStatusFallbackTimer)
   }
-  // Stop offboard heartbeat if active
-  stopOffboardHeartbeat()
+  // Stop offboard heartbeat via ROS node if active
+  if (isOffboardActive.value) {
+    sendOffboardManagerCommand('stop_offboard_heartbeat')
+  }
 })
 
 // Vehicle status subscription function with fallback logic
@@ -260,6 +243,19 @@ const sendCommand = (command: number, param1: number = 0, param2: number = 0, pa
   vehicleCommandTopic.publish(cmd)
 }
 
+// Send command to offboard manager node
+const sendOffboardManagerCommand = (command: string, distance_or_degrees: number = 0.0) => {
+  if (!offboardManagerTopic) return
+
+  const message = new ROSLIB.Message({
+    command: command,
+    distance_or_degrees: distance_or_degrees
+  })
+
+  offboardManagerTopic.publish(message)
+  console.log(`Sent offboard manager command: ${command}`)
+}
+
 const setMode = (mode: number) => {
   console.log('Setting mode:', mode, 'Current mode:', flightMode.value)
   
@@ -284,43 +280,23 @@ const armDrone = () => {
 }
 
 const land = () => {
-  sendCommand(21) // MAV_CMD_NAV_LAND
+  // Send land command to offboard manager - it will handle stopping heartbeat and landing
+  sendOffboardManagerCommand('land')
+  isOffboardActive.value = false
 }
 
 const moveForward = () => {
-  if (!trajectorySetpointTopic) return
-
-  const setpoint = {
-    timestamp: Date.now() * 1000,
-    position: [3.0, 0, -1.0], // Move 3 meters forward in NED frame (x=3, y=0, z=-1)
-    velocity: [0, 0, 0],
-    acceleration: [0, 0, 0],
-    jerk: [0, 0, 0],
-    yaw: 0
-  }
-
-  trajectorySetpointTopic.publish(setpoint)
-  console.log('Sending move forward command using trajectory setpoint')
+  // Send move forward command to offboard manager
+  sendOffboardManagerCommand('fly_forward', 3.0)
 }
 
-// Function to publish local coordinates to trajectory setpoint
+// Function to publish local coordinates - not used with ROS node architecture
+// The ROS node tracks position and movements internally
 const publishLocalPosition = (x: number, y: number, z: number = -1.0, yaw: number = 0) => {
-  if (!trajectorySetpointTopic) return
-
-  // Update the target position for the heartbeat
+  // Update the target position for reference
   offboardTargetPosition.value = { x, y, z, yaw }
-
-  const setpoint = {
-    timestamp: Date.now() * 1000,
-    position: [x, y, z], // Local coordinates in NED frame
-    velocity: [0, 0, 0],
-    acceleration: [0, 0, 0],
-    jerk: [0, 0, 0],
-    yaw: yaw
-  }
-
-  trajectorySetpointTopic.publish(setpoint)
-  console.log(`Sending trajectory setpoint: x=${x}m, y=${y}m, z=${z}m, yaw=${yaw}°`)
+  console.log(`Target position updated: x=${x}m, y=${y}m, z=${z}m, yaw=${yaw}°`)
+  console.log('Note: Direct position publishing not supported with ROS node architecture')
 }
 
 // Offboard mode functions
@@ -335,87 +311,21 @@ const toggleOffboardMode = () => {
 const startOffboardMode = () => {
   if (isOffboardActive.value) return
 
-  console.log('Starting offboard mode')
+  console.log('Starting offboard mode via ROS node')
   isOffboardActive.value = true
 
-  // Start publishing offboard heartbeat first
-  startOffboardHeartbeat()
-
-  // Wait 1 second, then set flight mode to offboard
-  setTimeout(() => {
-    sendCommand(176, 1, 6) // MAV_CMD_DO_SET_MODE with custom mode enabled, offboard
-    console.log('Switching to offboard mode after heartbeat delay')
-  }, 1000)
+  // Send command to ROS node to start offboard heartbeat
+  sendOffboardManagerCommand('start_offboard_heartbeat')
 }
 
 const stopOffboardMode = () => {
   if (!isOffboardActive.value) return
 
-  console.log('Stopping offboard heartbeat - PX4 will automatically exit offboard')
-  stopOffboardHeartbeat()
-}
+  console.log('Stopping offboard mode via ROS node')
 
-const startOffboardHeartbeat = () => {
-  if (!offboardControlModeTopic || !trajectorySetpointTopic) return
-
-  // Publish initial offboard control mode message
-  const offboardControlMode = {
-    timestamp: Date.now() * 1000,
-    position: true,
-    velocity: false,
-    acceleration: false,
-    attitude: false,
-    body_rate: false
-  }
-
-  // Publish initial trajectory setpoint (hold current position)
-  const trajectorySetpoint = {
-    timestamp: Date.now() * 1000,
-    position: [offboardTargetPosition.value.x, offboardTargetPosition.value.y, offboardTargetPosition.value.z],
-    velocity: [0, 0, 0],
-    acceleration: [0, 0, 0],
-    jerk: [0, 0, 0],
-    yaw: offboardTargetPosition.value.yaw
-  }
-
-  offboardControlModeTopic.publish(offboardControlMode)
-  trajectorySetpointTopic.publish(trajectorySetpoint)
-
-  // Start heartbeat timer (publish every 50ms)
-  offboardHeartbeatTimer = setInterval(() => {
-    const timestamp = Date.now() * 1000
-    
-    // Publish offboard control mode heartbeat
-    offboardControlModeTopic.publish({
-      timestamp,
-      position: true,
-      velocity: false,
-      acceleration: false,
-      attitude: false,
-      body_rate: false
-    })
-
-    // Publish trajectory setpoint heartbeat using current target position
-    trajectorySetpointTopic.publish({
-      timestamp,
-      position: [offboardTargetPosition.value.x, offboardTargetPosition.value.y, offboardTargetPosition.value.z],
-      velocity: [0, 0, 0],
-      acceleration: [0, 0, 0],
-      jerk: [0, 0, 0],
-      yaw: offboardTargetPosition.value.yaw
-    })
-  }, 50) // 50ms = 20Hz
-
-  console.log('Offboard heartbeat started')
-}
-
-const stopOffboardHeartbeat = () => {
-  if (offboardHeartbeatTimer) {
-    clearInterval(offboardHeartbeatTimer)
-    offboardHeartbeatTimer = null
-    isOffboardActive.value = false
-    console.log('Offboard heartbeat stopped')
-  }
+  // Send command to ROS node to stop offboard heartbeat
+  sendOffboardManagerCommand('stop_offboard_heartbeat')
+  isOffboardActive.value = false
 }
 
 // Expose functions and state for other components
