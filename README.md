@@ -2,9 +2,7 @@
 
 npm i
 
-npm run generate
-
-docker build -t droneblocks/dexi-droneblocks:latest .
+docker build -t droneblocks/dexi-droneblocks:anywhere .
 
 # Save image for DEXI OS build
 
