@@ -36,6 +36,15 @@
             <DroneGrid ref="droneGridRef" :flight-controls-ref="flightControlsRef" />
           </div>
 
+          <!-- SITL Tab -->
+          <div v-if="activeTab === 'sitl'" class="absolute inset-0">
+            <iframe
+              :src="sitlUrl"
+              class="w-full h-full border-0 block"
+              title="SITL Simulator"
+            />
+          </div>
+
         </div>
       </div>
 
@@ -65,7 +74,7 @@
 <script setup>
 import ROSLIB from 'roslib';
 import { useROS } from '~/composables/useROS';
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import CameraFeed from '~/components/CameraFeed.vue';
 import ServoPanel from '~/components/ServoPanel.vue';
 import MainMenu from '~/components/MainMenu.vue';
@@ -79,6 +88,7 @@ const props = defineProps({
 })
 
 const { getROSURL } = useROS();
+const route = useRoute();
 
 // Tab management
 const activeTab = ref('camera');
@@ -88,10 +98,30 @@ const mainMenuRef = ref();
 // Keyboard control modal
 const showKeyboardControl = ref(false);
 
-const tabs = [
+// SITL URL - construct from current hostname with port 1337
+const sitlUrl = ref('');
+if (process.client) {
+  const hostname = window.location.hostname;
+  sitlUrl.value = `http://${hostname}:1337/`;
+}
+
+// Check if SITL mode is enabled via query parameter
+const sitlEnabled = computed(() => route.query.sitl === 'true');
+
+// All possible tabs
+const allTabs = [
   { id: 'camera', name: 'Camera' },
-  { id: 'map', name: 'Map' }
+  { id: 'map', name: 'Map' },
+  { id: 'sitl', name: 'SITL' }
 ];
+
+// Filter tabs based on SITL mode
+const tabs = computed(() => {
+  if (sitlEnabled.value) {
+    return allTabs;
+  }
+  return allTabs.filter(tab => tab.id !== 'sitl');
+});
 
 // DEXI LED Ring colors from DroneBlocks node-red-dexi
 const dexiLEDColors = {
