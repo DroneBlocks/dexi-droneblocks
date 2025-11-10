@@ -87,7 +87,7 @@ const props = defineProps({
   }
 })
 
-const { getROSURL } = useROS();
+const { getROSURL, isDevMode } = useROS();
 const route = useRoute();
 
 // Tab management
@@ -105,8 +105,8 @@ if (process.client) {
   sitlUrl.value = `http://${hostname}:1337/`;
 }
 
-// Check if SITL mode is enabled via query parameter
-const sitlEnabled = computed(() => route.query.sitl === 'true');
+// Check if SITL mode is enabled via query parameter or dev mode
+const sitlEnabled = computed(() => isDevMode() || route.query.sitl === 'true');
 
 // All possible tabs
 const allTabs = [
