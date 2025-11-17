@@ -1,9 +1,11 @@
 <template>
   <div class="w-full bg-gray-900 text-white p-4">
-    <!-- Flight Mode Display -->
+    <!-- Flight Mode and Battery Display -->
     <div class="flex items-center space-x-4 mb-4">
       <span class="text-gray-400">Flight Mode:</span>
       <span class="font-mono">{{ flightMode }}</span>
+      <span class="text-gray-400 ml-8">Battery:</span>
+      <span class="font-mono" :class="batteryColorClass">{{ batteryDisplay }}</span>
     </div>
 
     <!-- Control Buttons -->
@@ -64,7 +66,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, defineExpose } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, defineExpose } from 'vue'
 import ROSLIB from 'roslib'
 import { useROS } from '~/composables/useROS'
 
@@ -81,14 +83,29 @@ const navState = ref('N/A')
 const isArmed = ref(false)
 const isFlying = ref(false)
 const isOffboardActive = ref(false)
+const batteryPercentage = ref<number | null>(null)
 
 // Offboard target position (reactive so it can be updated by other components)
 const offboardTargetPosition = ref({ x: 0, y: 0, z: -1.0, yaw: 0 })
+
+// Computed properties for battery display
+const batteryDisplay = computed(() => {
+  if (batteryPercentage.value === null) return 'N/A'
+  return `${Math.round(batteryPercentage.value)}%`
+})
+
+const batteryColorClass = computed(() => {
+  if (batteryPercentage.value === null) return 'text-gray-400'
+  if (batteryPercentage.value > 50) return 'text-green-400'
+  if (batteryPercentage.value > 20) return 'text-yellow-400'
+  return 'text-red-400'
+})
 
 // Topics
 let vehicleStatusTopic: ROSLIB.Topic | null = null
 let vehicleCommandTopic: ROSLIB.Topic | null = null
 let offboardManagerTopic: ROSLIB.Topic | null = null
+let batteryStatusTopic: ROSLIB.Topic | null = null
 
 // Vehicle status topic fallback logic
 let vehicleStatusFallbackTimer: NodeJS.Timeout | null = null
@@ -166,11 +183,28 @@ onMounted(() => {
     name: '/dexi/offboard_manager',
     messageType: 'dexi_interfaces/msg/OffboardNavCommand'
   })
+
+  // Subscribe to battery status topic
+  batteryStatusTopic = new ROSLIB.Topic({
+    ros: ros,
+    name: '/fmu/out/battery_status',
+    messageType: 'px4_msgs/msg/BatteryStatus'
+  })
+
+  batteryStatusTopic.subscribe((message: any) => {
+    // PX4 battery_status message has 'remaining' field as float (0.0 to 1.0)
+    if (message.remaining !== undefined) {
+      batteryPercentage.value = message.remaining * 100
+    }
+  })
 })
 
 onBeforeUnmount(() => {
   if (vehicleStatusTopic) {
     vehicleStatusTopic.unsubscribe()
+  }
+  if (batteryStatusTopic) {
+    batteryStatusTopic.unsubscribe()
   }
   if (vehicleStatusFallbackTimer) {
     clearTimeout(vehicleStatusFallbackTimer)
@@ -201,7 +235,6 @@ const subscribeToVehicleStatus = (topicName: string, isFallback: boolean = false
     hasReceivedVehicleStatus = true
     if (isFallback) {
       usingFallbackTopic = true
-      console.log(`Successfully receiving messages from fallback topic: ${topicName}`)
     }
 
     // Clear fallback timer since we're receiving messages
