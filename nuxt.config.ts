@@ -15,5 +15,10 @@ export default defineNuxtConfig({
         'data-theme': 'light'
       }
     }
+  },
+  vue: {
+    compilerOptions: {
+      isCustomElement: (tag) => tag === 'xml'
+    }
   }
 })

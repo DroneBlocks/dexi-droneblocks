@@ -3,7 +3,7 @@
     <!-- Flight Mode and Battery Display -->
     <div class="flex items-center space-x-4 mb-4">
       <span class="text-gray-400">Flight Mode:</span>
-      <span class="font-mono">{{ flightMode }}</span>
+      <FlightModeDisplay :ros="ros" class="font-mono" />
       <span class="text-gray-400 ml-8">Battery:</span>
       <span class="font-mono" :class="batteryColorClass">{{ batteryDisplay }}</span>
     </div>
@@ -72,13 +72,10 @@ import { useROS } from '~/composables/useROS'
 
 const { getROSURL } = useROS()
 
-// ROS connection
-const ros = new ROSLIB.Ros({
-  url: getROSURL()
-})
+// ROS connection - make it reactive so FlightModeDisplay can properly subscribe
+const ros = ref<ROSLIB.Ros | null>(null)
 
 // State
-const flightMode = ref('Unknown')
 const navState = ref('N/A')
 const isArmed = ref(false)
 const isFlying = ref(false)
@@ -112,33 +109,6 @@ let vehicleStatusFallbackTimer: NodeJS.Timeout | null = null
 let hasReceivedVehicleStatus = false
 let usingFallbackTopic = false
 
-// Flight mode mapping
-const flightModes: { [key: number]: string } = {
-  0: 'MANUAL',
-  1: 'ALTITUDE',
-  2: 'POSITION',
-  3: 'MISSION',
-  4: 'HOLD',
-  5: 'RTL',
-  6: 'SLOW',
-  7: 'FREE5',
-  8: 'FREE4',
-  9: 'FREE3',
-  10: 'ACRO',
-  11: 'FREE2',
-  12: 'DESCEND',
-  13: 'TERMINATION',
-  14: 'OFFBOARD',
-  15: 'STABILIZED',
-  16: 'FREE1',
-  17: 'TAKEOFF',
-  18: 'LAND',
-  19: 'TARGET',
-  20: 'PRECLAND',
-  21: 'ORBIT',
-  22: 'VTOL_TAKEOFF'
-}
-
 // Command interface
 interface VehicleCommand {
   timestamp: number
@@ -159,6 +129,23 @@ interface VehicleCommand {
 }
 
 onMounted(() => {
+  // Create ROS connection
+  ros.value = new ROSLIB.Ros({
+    url: getROSURL()
+  })
+
+  ros.value.on('connection', () => {
+    console.log('FlightControls: Connected to ROS')
+  })
+
+  ros.value.on('error', (error: any) => {
+    console.error('FlightControls: ROS connection error:', error)
+  })
+
+  ros.value.on('close', () => {
+    console.log('FlightControls: ROS connection closed')
+  })
+
   // Start with primary vehicle status topic
   subscribeToVehicleStatus('/fmu/out/vehicle_status')
 
@@ -172,21 +159,21 @@ onMounted(() => {
 
   // Initialize command publisher for direct PX4 commands
   vehicleCommandTopic = new ROSLIB.Topic({
-    ros: ros,
+    ros: ros.value as ROSLIB.Ros,
     name: '/fmu/in/vehicle_command',
     messageType: 'px4_msgs/msg/VehicleCommand'
   })
 
   // Initialize offboard manager command publisher
   offboardManagerTopic = new ROSLIB.Topic({
-    ros: ros,
+    ros: ros.value as ROSLIB.Ros,
     name: '/dexi/offboard_manager',
     messageType: 'dexi_interfaces/msg/OffboardNavCommand'
   })
 
   // Subscribe to battery status topic
   batteryStatusTopic = new ROSLIB.Topic({
-    ros: ros,
+    ros: ros.value as ROSLIB.Ros,
     name: '/fmu/out/battery_status',
     messageType: 'px4_msgs/msg/BatteryStatus'
   })
@@ -213,6 +200,10 @@ onBeforeUnmount(() => {
   if (isOffboardActive.value) {
     sendOffboardManagerCommand('stop_offboard_heartbeat')
   }
+  // Close ROS connection
+  if (ros.value) {
+    ros.value.close()
+  }
 })
 
 // Vehicle status subscription function with fallback logic
@@ -222,10 +213,15 @@ const subscribeToVehicleStatus = (topicName: string, isFallback: boolean = false
     vehicleStatusTopic.unsubscribe()
   }
 
+  if (!ros.value) {
+    console.error('Cannot subscribe to vehicle status: ROS not connected')
+    return
+  }
+
   console.log(`Subscribing to vehicle status topic: ${topicName}`)
 
   vehicleStatusTopic = new ROSLIB.Topic({
-    ros: ros,
+    ros: ros.value as ROSLIB.Ros,
     name: topicName,
     messageType: 'px4_msgs/msg/VehicleStatus'
   })
@@ -245,7 +241,6 @@ const subscribeToVehicleStatus = (topicName: string, isFallback: boolean = false
 
     // Process the vehicle status message
     navState.value = message.nav_state
-    flightMode.value = flightModes[message.nav_state] || 'Unknown'
     isArmed.value = message.arming_state === 2 // 2 = ARMED
     isFlying.value = message.nav_state !== 18 && message.nav_state !== 13
   })
@@ -290,7 +285,7 @@ const sendOffboardManagerCommand = (command: string, distance_or_degrees: number
 }
 
 const setMode = (mode: number) => {
-  console.log('Setting mode:', mode, 'Current mode:', flightMode.value)
+  console.log('Setting mode:', mode)
   
   // For position mode, we need to set both the base mode and custom mode
   if (mode === 2) { // POSITION mode
