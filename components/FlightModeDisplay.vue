@@ -1,5 +1,8 @@
 <template>
-  <span :class="className">{{ flightMode }}</span>
+  <div class="flight-mode-display">
+    <span class="mode-label">Mode:</span>
+    <span class="mode-value">{{ flightMode }}</span>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -133,3 +136,27 @@ onBeforeUnmount(() => {
 // Expose flight mode for parent components if needed
 defineExpose({ flightMode })
 </script>
+
+<style scoped>
+.flight-mode-display {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: 'Courier New', monospace;
+  font-size: 0.875rem;
+  padding: 0.375rem 0.75rem;
+  background: rgba(42, 157, 143, 0.15);
+  border-radius: 6px;
+  border: 1px solid rgba(42, 157, 143, 0.3);
+}
+
+.mode-label {
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+}
+
+.mode-value {
+  color: #4ade80;
+  font-weight: 600;
+}
+</style>
