@@ -84,6 +84,13 @@ const nedNorth = ref<number>(0);
 const nedEast = ref<number>(0);
 const nedDown = ref<number>(0);
 
+// Unity simulator URL - use current hostname
+const unityUrl = ref('');
+if (process.client) {
+  const hostname = window.location.hostname;
+  unityUrl.value = `http://${hostname}:1337`;
+}
+
 const options = {
   media: 'https://unpkg.com/blockly@11.0.0/media/',
   grid: {
@@ -1559,7 +1566,7 @@ onUnmounted(() => {
 
       <div class="unity-panel" :style="{ width: (100 - leftPanelWidth) + '%' }">
         <iframe
-          src="http://localhost:1337"
+          :src="unityUrl"
           class="unity-iframe"
           frameborder="0"
           allowfullscreen
