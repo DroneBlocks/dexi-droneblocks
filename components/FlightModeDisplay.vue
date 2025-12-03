@@ -1,6 +1,6 @@
 <template>
   <div class="flight-mode-display">
-    <span class="mode-label">Mode:</span>
+    <span class="mode-label">Flight Mode:</span>
     <span class="mode-value">{{ flightMode }}</span>
   </div>
 </template>

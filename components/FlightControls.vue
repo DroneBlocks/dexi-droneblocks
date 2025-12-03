@@ -1,11 +1,35 @@
 <template>
   <div class="w-full bg-gray-900 text-white p-4">
-    <!-- Flight Mode and Battery Display -->
-    <div class="flex items-center space-x-4 mb-4">
-      <span class="text-gray-400">Flight Mode:</span>
-      <FlightModeDisplay :ros="ros" class="font-mono" />
-      <span class="text-gray-400 ml-8">Battery:</span>
-      <span class="font-mono" :class="batteryColorClass">{{ batteryDisplay }}</span>
+    <!-- Telemetry Display -->
+    <div class="flex items-center space-x-6 mb-4 text-sm">
+      <!-- Flight Mode -->
+      <div class="flex items-center space-x-2">
+        <FlightModeDisplay :ros="ros" class="font-mono" />
+      </div>
+
+      <!-- Battery -->
+      <div class="flex items-center space-x-2">
+        <span class="text-gray-400">Battery:</span>
+        <span class="font-mono" :class="batteryColorClass">{{ batteryDisplay }}</span>
+      </div>
+
+      <!-- Altitude -->
+      <div class="flex items-center space-x-2">
+        <span class="text-gray-400">Alt:</span>
+        <span class="font-mono text-green-400">{{ altitudeDisplay }}</span>
+      </div>
+
+      <!-- Ground Speed -->
+      <div class="flex items-center space-x-2">
+        <span class="text-gray-400">Speed:</span>
+        <span class="font-mono text-yellow-400">{{ speedDisplay }}</span>
+      </div>
+
+      <!-- Heading -->
+      <div class="flex items-center space-x-2">
+        <span class="text-gray-400">Heading:</span>
+        <span class="font-mono text-purple-400">{{ headingDisplay }}</span>
+      </div>
     </div>
 
     <!-- Control Buttons -->
@@ -82,6 +106,13 @@ const isFlying = ref(false)
 const isOffboardActive = ref(false)
 const batteryPercentage = ref<number | null>(null)
 
+// Telemetry state
+const gpsLat = ref<number | null>(null)
+const gpsLon = ref<number | null>(null)
+const altitude = ref<number | null>(null)
+const groundSpeed = ref<number | null>(null)
+const heading = ref<number | null>(null)
+
 // Offboard target position (reactive so it can be updated by other components)
 const offboardTargetPosition = ref({ x: 0, y: 0, z: -1.0, yaw: 0 })
 
@@ -98,11 +129,35 @@ const batteryColorClass = computed(() => {
   return 'text-red-400'
 })
 
+// Computed properties for telemetry display
+const gpsDisplay = computed(() => {
+  if (gpsLat.value === null || gpsLon.value === null) return 'No Fix'
+  return `${gpsLat.value.toFixed(6)}, ${gpsLon.value.toFixed(6)}`
+})
+
+const altitudeDisplay = computed(() => {
+  if (altitude.value === null) return 'N/A'
+  return `${altitude.value.toFixed(1)}m`
+})
+
+const speedDisplay = computed(() => {
+  if (groundSpeed.value === null) return 'N/A'
+  return `${groundSpeed.value.toFixed(1)} m/s`
+})
+
+const headingDisplay = computed(() => {
+  if (heading.value === null) return 'N/A'
+  return `${heading.value.toFixed(0)}°`
+})
+
 // Topics
 let vehicleStatusTopic: ROSLIB.Topic | null = null
 let vehicleCommandTopic: ROSLIB.Topic | null = null
 let offboardManagerTopic: ROSLIB.Topic | null = null
 let batteryStatusTopic: ROSLIB.Topic | null = null
+let gpsPositionTopic: ROSLIB.Topic | null = null
+let localPositionTopic: ROSLIB.Topic | null = null
+let attitudeTopic: ROSLIB.Topic | null = null
 
 // Vehicle status topic fallback logic
 let vehicleStatusFallbackTimer: NodeJS.Timeout | null = null
@@ -184,6 +239,57 @@ onMounted(() => {
       batteryPercentage.value = message.remaining * 100
     }
   })
+
+  // Subscribe to GPS position topic
+  gpsPositionTopic = new ROSLIB.Topic({
+    ros: ros.value as ROSLIB.Ros,
+    name: '/fmu/out/vehicle_gps_position',
+    messageType: 'px4_msgs/msg/VehicleGpsPosition'
+  })
+
+  gpsPositionTopic.subscribe((message: any) => {
+    // GPS coordinates are already in degrees
+    if (message.latitude_deg !== undefined && message.longitude_deg !== undefined) {
+      gpsLat.value = message.latitude_deg
+      gpsLon.value = message.longitude_deg
+    }
+  })
+
+  // Subscribe to local position topic for velocity and altitude
+  localPositionTopic = new ROSLIB.Topic({
+    ros: ros.value as ROSLIB.Ros,
+    name: '/fmu/out/vehicle_local_position',
+    messageType: 'px4_msgs/msg/VehicleLocalPosition'
+  })
+
+  localPositionTopic.subscribe((message: any) => {
+    // Calculate ground speed from vx and vy
+    if (message.vx !== undefined && message.vy !== undefined) {
+      groundSpeed.value = Math.sqrt(message.vx * message.vx + message.vy * message.vy)
+    }
+    // Altitude from z position (NED frame, so negate for positive up)
+    if (message.z !== undefined) {
+      altitude.value = -message.z
+    }
+  })
+
+  // Subscribe to attitude topic for heading
+  attitudeTopic = new ROSLIB.Topic({
+    ros: ros.value as ROSLIB.Ros,
+    name: '/fmu/out/vehicle_attitude',
+    messageType: 'px4_msgs/msg/VehicleAttitude'
+  })
+
+  attitudeTopic.subscribe((message: any) => {
+    // Convert quaternion to heading (yaw in degrees)
+    if (message.q !== undefined && message.q.length >= 4) {
+      const q = message.q
+      // Calculate yaw from quaternion
+      const yaw = Math.atan2(2.0 * (q[0] * q[3] + q[1] * q[2]), 1.0 - 2.0 * (q[2] * q[2] + q[3] * q[3]))
+      // Convert to degrees and normalize to 0-360
+      heading.value = ((yaw * 180.0 / Math.PI) + 360) % 360
+    }
+  })
 })
 
 onBeforeUnmount(() => {
@@ -192,6 +298,15 @@ onBeforeUnmount(() => {
   }
   if (batteryStatusTopic) {
     batteryStatusTopic.unsubscribe()
+  }
+  if (gpsPositionTopic) {
+    gpsPositionTopic.unsubscribe()
+  }
+  if (localPositionTopic) {
+    localPositionTopic.unsubscribe()
+  }
+  if (attitudeTopic) {
+    attitudeTopic.unsubscribe()
   }
   if (vehicleStatusFallbackTimer) {
     clearTimeout(vehicleStatusFallbackTimer)

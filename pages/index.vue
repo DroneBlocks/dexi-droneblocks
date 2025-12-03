@@ -4,12 +4,8 @@
     <div class="bg-white border-b border-slate-200">
       <div class="container mx-auto px-6 py-8">
         <div class="flex items-center justify-between">
-          <div class="flex items-center gap-4">
+          <div class="flex items-center">
             <img src="~/assets/droneblocks_logo.svg" class="h-12" alt="DroneBlocks Logo" />
-            <div>
-              <h1 class="text-3xl font-semibold text-slate-900">DEXI Dashboard</h1>
-              <p class="text-sm text-slate-500 mt-1">Autonomous drone development platform</p>
-            </div>
           </div>
           <a
             href="https://github.com/DroneBlocks/dexi-os/releases/tag/v0.13"
