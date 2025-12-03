@@ -12,10 +12,14 @@ export class LED {
             "type": "field_dropdown",
             "name": "effect",
             "options": [
-              ["rainbow", "rainbow"],
-              ["loading", "loading"],
               ["comet", "comet"],
-              ["galaxy", "galaxy"]
+              ["festive", "festive"],
+              ["galaxy", "galaxy"],
+              ["gradient", "gradient"],
+              ["loading", "loading"],
+              ["rainbow", "rainbow"],
+              ["snake", "snake"],
+              ["wave", "wave"]
             ]
           }
         ],
