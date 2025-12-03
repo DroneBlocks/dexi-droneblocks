@@ -237,7 +237,7 @@ export function useTutorial() {
     // State
     state: computed(() => state.value),
     isActive: computed(() => state.value.isActive),
-    showWelcome: computed(() => state.value.showWelcome),
+    isShowingWelcome: computed(() => state.value.showWelcome),
     currentLesson: computed(() => state.value.currentLesson),
     currentStep,
     currentStepIndex: computed(() => state.value.currentStepIndex),

@@ -1,6 +1,6 @@
 <template>
   <Transition name="fade">
-    <div v-if="tutorial.showWelcome.value" class="tutorial-welcome-overlay">
+    <div v-if="tutorial.isShowingWelcome.value" class="tutorial-welcome-overlay">
       <div class="tutorial-welcome-modal">
         <div class="welcome-header">
           <h1 class="welcome-title">Welcome to DroneBlocks! 🚁</h1>
@@ -69,9 +69,9 @@ function handleStartTutorial() {
 
 function handleSkipTutorial() {
   console.log('Skip Tutorial clicked');
-  console.log('showWelcome before skip:', tutorial.showWelcome.value);
+  console.log('showWelcome before skip:', tutorial.isShowingWelcome.value);
   skipTutorial();
-  console.log('showWelcome after skip:', tutorial.showWelcome.value);
+  console.log('showWelcome after skip:', tutorial.isShowingWelcome.value);
 }
 </script>
 
