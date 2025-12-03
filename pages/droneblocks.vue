@@ -11,6 +11,7 @@ import TutorialWelcome from '~/tutorial/components/TutorialWelcome.vue';
 import TutorialModal from '~/tutorial/components/TutorialModal.vue';
 import TutorialHighlight from '~/tutorial/components/TutorialHighlight.vue';
 import TutorialLessonPicker from '~/tutorial/components/TutorialLessonPicker.vue';
+import KeyboardControl from '~/components/KeyboardControl.vue';
 
 const navigation = new Navigation();
 const led = new LED();
@@ -19,6 +20,42 @@ const apriltag = new AprilTag();
 // Tutorial system
 const tutorial = useTutorial();
 const showLessonPicker = ref(false);
+
+// Menu and keyboard control
+const showMenu = ref(false);
+const showKeyboardControl = ref(false);
+
+// Load tabs from localStorage or use default
+const loadTabsFromStorage = () => {
+  const savedTabs = localStorage.getItem('droneblocks_tabs');
+  const savedActiveTab = localStorage.getItem('droneblocks_active_tab');
+  const savedNextId = localStorage.getItem('droneblocks_next_tab_id');
+
+  if (savedTabs) {
+    try {
+      return {
+        tabs: JSON.parse(savedTabs),
+        activeTabId: savedActiveTab ? parseInt(savedActiveTab) : 1,
+        nextTabId: savedNextId ? parseInt(savedNextId) : 2
+      };
+    } catch (error) {
+      console.error('Failed to load tabs from localStorage:', error);
+    }
+  }
+
+  return {
+    tabs: [{ id: 1, name: 'Mission 1', workspace: null }],
+    activeTabId: 1,
+    nextTabId: 2
+  };
+};
+
+const tabsData = loadTabsFromStorage();
+
+// Tabs for multiple canvases
+const tabs = ref(tabsData.tabs);
+const activeTabId = ref(tabsData.activeTabId);
+const nextTabId = ref(tabsData.nextTabId);
 
 const foo = ref();
 const ros = ref<ROSLIB.Ros | null>(null);
@@ -36,6 +73,16 @@ const notificationType = ref<'success' | 'error'>('success');
 const apriltagSubscription = ref<ROSLIB.Topic | null>(null);
 const lastDetectedTagId = ref<number>(-1);
 const detectedTagCount = ref<number>(0);
+const currentAprilTagId = ref<number>(-1);
+let apriltagTimeoutId: NodeJS.Timeout | null = null;
+
+// Mission state tracking
+const isMissionRunning = ref(false);
+
+// NED position tracking
+const nedNorth = ref<number>(0);
+const nedEast = ref<number>(0);
+const nedDown = ref<number>(0);
 
 const options = {
   media: 'https://unpkg.com/blockly@11.0.0/media/',
@@ -64,6 +111,7 @@ const options = {
       </category>
       <category name="Takeoff" colour="#4CAF50">
         <block type="nav_arm"></block>
+        <block type="nav_disarm"></block>
         <block type="nav_takeoff">
           <value name="ALTITUDE">
             <shadow type="math_number">
@@ -542,6 +590,46 @@ const connectToROS = () => {
         name: '/dexi/led_service/set_led_pixel_color',
         serviceType: 'dexi_interfaces/srv/LEDPixelColor'
       });
+
+      // Subscribe to AprilTag detections for debugging
+      const apriltagDebugTopic = new ROSLIB.Topic({
+        ros: ros.value as ROSLIB.Ros,
+        name: '/apriltag_detections',
+        messageType: 'apriltag_msgs/AprilTagDetectionArray'
+      });
+
+      apriltagDebugTopic.subscribe((message: any) => {
+        if (message.detections && message.detections.length > 0) {
+          currentAprilTagId.value = message.detections[0].id;
+
+          // Clear any existing timeout
+          if (apriltagTimeoutId) {
+            clearTimeout(apriltagTimeoutId);
+          }
+
+          // Set a timeout to reset the tag ID if no new detections come in
+          apriltagTimeoutId = setTimeout(() => {
+            currentAprilTagId.value = -1;
+          }, 500); // Reset after 500ms of no detections
+        } else {
+          currentAprilTagId.value = -1;
+        }
+      });
+
+      // Subscribe to vehicle local position for NED coordinates
+      const localPositionTopic = new ROSLIB.Topic({
+        ros: ros.value as ROSLIB.Ros,
+        name: '/fmu/out/vehicle_local_position',
+        messageType: 'px4_msgs/msg/VehicleLocalPosition'
+      });
+
+      localPositionTopic.subscribe((message: any) => {
+        nedNorth.value = message.x;
+        nedEast.value = message.y;
+        nedDown.value = message.z;
+      });
+
+      console.log('✅ Connected to ROS and services initialized');
     });
 
     ros.value.on('error', (error: any) => {
@@ -694,6 +782,8 @@ const runMission = async () => {
   }
 
   try {
+    isMissionRunning.value = true;
+
     // Get all blocks in execution order
     const mainBlock = topBlocks[0];
     const blocksToExecute = [];
@@ -717,6 +807,8 @@ const runMission = async () => {
         // Parse block and execute command
         if (blockType === 'nav_arm') {
           await executeCommandWithService('arm', 0, 10);
+        } else if (blockType === 'nav_disarm') {
+          await executeCommandWithService('disarm', 0, 10);
         } else if (blockType === 'nav_start_offboard_heartbeat') {
           await executeCommandWithService('start_offboard_heartbeat', 0, 5);
         } else if (blockType === 'nav_stop_offboard_heartbeat') {
@@ -893,12 +985,14 @@ const runMission = async () => {
               if (message.detections && message.detections.length > 0) {
                 lastDetectedTagId.value = message.detections[0].id;
                 detectedTagCount.value = message.detections.length;
-                console.log(`📷 Detected ${detectedTagCount.value} AprilTag(s), ID: ${lastDetectedTagId.value}`);
               } else {
                 detectedTagCount.value = 0;
               }
             });
             console.log('✅ Started AprilTag monitoring');
+
+            // Wait a bit for first message to arrive
+            await new Promise(resolve => setTimeout(resolve, 200));
           }
         } else if (blockType === 'apriltag_stop_monitoring') {
           // Stop monitoring AprilTags
@@ -906,6 +1000,213 @@ const runMission = async () => {
             apriltagSubscription.value.unsubscribe();
             apriltagSubscription.value = null;
             console.log('⏹️ Stopped AprilTag monitoring');
+          }
+        } else if (blockType === 'controls_repeat_ext') {
+          // Handle repeat loop
+          const timesBlock = block.getInputTargetBlock('TIMES');
+          let repeatCount = 10; // Default
+
+          if (timesBlock && timesBlock.type === 'math_number') {
+            repeatCount = parseInt(timesBlock.getFieldValue('NUM'));
+          }
+
+          console.log(`🔁 Starting loop (${repeatCount} iterations)`);
+
+          // Execute the blocks inside the loop
+          const doBlock = block.getInputTargetBlock('DO');
+          if (doBlock) {
+            for (let i = 0; i < repeatCount; i++) {
+              console.log(`🔁 Loop iteration ${i + 1}/${repeatCount}`);
+
+              let currentBlock = doBlock;
+              while (currentBlock) {
+                const innerBlockType = currentBlock.type;
+
+                // Execute blocks inside the loop (similar to if statement handling)
+                if (innerBlockType === 'text_print') {
+                  const textBlock = currentBlock.getInputTargetBlock('TEXT');
+                  let message = '';
+                  if (textBlock && textBlock.type === 'text') {
+                    message = textBlock.getFieldValue('TEXT');
+                  }
+                  console.log(`📝 ${message}`);
+                } else if (innerBlockType === 'led_effect') {
+                  const effect = currentBlock.getFieldValue('effect');
+                  if (ledEffectService.value) {
+                    const request = new ROSLIB.ServiceRequest({ effect: effect });
+                    await new Promise((resolve, reject) => {
+                      ledEffectService.value!.callService(request, (response: any) => {
+                        console.log(`✅ LED effect set to ${effect}`);
+                        resolve(response);
+                      }, (error: any) => {
+                        console.error(`❌ LED effect failed:`, error);
+                        reject(error);
+                      });
+                    });
+                  }
+                } else if (innerBlockType === 'led_ring') {
+                  const color = currentBlock.getFieldValue('color');
+                  if (ledRingColorService.value) {
+                    const request = new ROSLIB.ServiceRequest({ color: color });
+                    await new Promise((resolve, reject) => {
+                      ledRingColorService.value!.callService(request, (response: any) => {
+                        console.log(`✅ LED ring set to ${color}`);
+                        resolve(response);
+                      }, (error: any) => {
+                        console.error(`❌ LED ring color failed:`, error);
+                        reject(error);
+                      });
+                    });
+                  }
+                } else if (innerBlockType === 'nav_wait') {
+                  const durationInput = currentBlock.getInput('DURATION');
+                  let duration = 1; // default
+                  if (durationInput && durationInput.connection && durationInput.connection.targetBlock()) {
+                    const targetBlock = durationInput.connection.targetBlock();
+                    if (targetBlock.type === 'math_number') {
+                      duration = parseFloat(targetBlock.getFieldValue('NUM'));
+                    }
+                  }
+                  console.log(`⏱️ Waiting ${duration} seconds...`);
+                  await new Promise(resolve => setTimeout(resolve, duration * 1000));
+                }
+
+                currentBlock = currentBlock.getNextBlock();
+              }
+            }
+          }
+        } else if (blockType === 'controls_if') {
+          // Handle if/else conditional blocks
+          const conditionValue = block.getInputTargetBlock('IF0');
+          let shouldExecute = false;
+
+          if (conditionValue) {
+            const conditionType = conditionValue.type;
+
+            if (conditionType === 'logic_compare') {
+              const operator = conditionValue.getFieldValue('OP');
+              const leftBlock = conditionValue.getInputTargetBlock('A');
+              const rightBlock = conditionValue.getInputTargetBlock('B');
+
+              let leftValue: any;
+              let rightValue: any;
+
+              // Evaluate left side
+              if (leftBlock) {
+                console.log(`🔍 Left block type: ${leftBlock.type}`);
+                if (leftBlock.type === 'apriltag_get_last_id') {
+                  leftValue = lastDetectedTagId.value;
+                  console.log(`📷 Reading lastDetectedTagId: ${leftValue}`);
+                } else if (leftBlock.type === 'apriltag_get_tag_count') {
+                  leftValue = detectedTagCount.value;
+                  console.log(`📷 Reading detectedTagCount: ${leftValue}`);
+                } else if (leftBlock.type === 'math_number') {
+                  leftValue = parseFloat(leftBlock.getFieldValue('NUM'));
+                  console.log(`🔢 Reading number: ${leftValue}`);
+                }
+              } else {
+                console.log('⚠️ No left block found');
+              }
+
+              // Evaluate right side
+              if (rightBlock) {
+                console.log(`🔍 Right block type: ${rightBlock.type}`);
+                if (rightBlock.type === 'math_number') {
+                  rightValue = parseFloat(rightBlock.getFieldValue('NUM'));
+                  console.log(`🔢 Reading number: ${rightValue}`);
+                } else if (rightBlock.type === 'apriltag_get_last_id') {
+                  rightValue = lastDetectedTagId.value;
+                  console.log(`📷 Reading lastDetectedTagId: ${rightValue}`);
+                } else if (rightBlock.type === 'apriltag_get_tag_count') {
+                  rightValue = detectedTagCount.value;
+                  console.log(`📷 Reading detectedTagCount: ${rightValue}`);
+                }
+              } else {
+                console.log('⚠️ No right block found');
+              }
+
+              // Evaluate condition
+              switch (operator) {
+                case 'EQ':
+                  shouldExecute = leftValue === rightValue;
+                  break;
+                case 'NEQ':
+                  shouldExecute = leftValue !== rightValue;
+                  break;
+                case 'LT':
+                  shouldExecute = leftValue < rightValue;
+                  break;
+                case 'LTE':
+                  shouldExecute = leftValue <= rightValue;
+                  break;
+                case 'GT':
+                  shouldExecute = leftValue > rightValue;
+                  break;
+                case 'GTE':
+                  shouldExecute = leftValue >= rightValue;
+                  break;
+              }
+
+              console.log(`🔍 Condition evaluated: ${leftValue} ${operator} ${rightValue} = ${shouldExecute}`);
+            }
+          }
+
+          // Execute blocks inside the if statement if condition is true
+          if (shouldExecute) {
+            const doBlock = block.getInputTargetBlock('DO0');
+            if (doBlock) {
+              console.log('✅ Condition true, executing blocks inside if statement');
+              let currentBlock = doBlock;
+              while (currentBlock) {
+                const innerBlockType = currentBlock.type;
+
+                // Recursively handle blocks inside the if
+                if (innerBlockType === 'text_print') {
+                  const textBlock = currentBlock.getInputTargetBlock('TEXT');
+                  let message = '';
+
+                  if (textBlock) {
+                    if (textBlock.type === 'text') {
+                      message = textBlock.getFieldValue('TEXT');
+                    }
+                  }
+
+                  console.log(`📝 ${message}`);
+                } else if (innerBlockType === 'led_effect') {
+                  const effect = currentBlock.getFieldValue('effect');
+                  if (ledEffectService.value) {
+                    const request = new ROSLIB.ServiceRequest({ effect: effect });
+                    await new Promise((resolve, reject) => {
+                      ledEffectService.value!.callService(request, (response: any) => {
+                        console.log(`✅ LED effect set to ${effect}`);
+                        resolve(response);
+                      }, (error: any) => {
+                        console.error(`❌ LED effect failed:`, error);
+                        reject(error);
+                      });
+                    });
+                  }
+                } else if (innerBlockType === 'led_ring') {
+                  const color = currentBlock.getFieldValue('color');
+                  if (ledRingColorService.value) {
+                    const request = new ROSLIB.ServiceRequest({ color: color });
+                    await new Promise((resolve, reject) => {
+                      ledRingColorService.value!.callService(request, (response: any) => {
+                        console.log(`✅ LED ring set to ${color}`);
+                        resolve(response);
+                      }, (error: any) => {
+                        console.error(`❌ LED ring color failed:`, error);
+                        reject(error);
+                      });
+                    });
+                  }
+                }
+
+                currentBlock = currentBlock.getNextBlock();
+              }
+            }
+          } else {
+            console.log('❌ Condition false, skipping if statement blocks');
           }
         } else {
           console.log(`⚠️ Skipping unknown block type: ${blockType}`);
@@ -927,6 +1228,8 @@ const runMission = async () => {
     console.error('❌ Mission failed:', error);
     displayNotification('Mission failed: ' + error, 'error');
     foo.value.workspace.highlightBlock(null);
+  } finally {
+    isMissionRunning.value = false;
   }
 };
 
@@ -934,6 +1237,8 @@ const stopMission = () => {
   if (!connected.value || !offboardCommandTopic.value) {
     return;
   }
+
+  isMissionRunning.value = false;
 
   // Send disarm command
   offboardCommandTopic.value.publish({
@@ -968,37 +1273,130 @@ const onDrag = (e: MouseEvent) => {
   }
 };
 
+// Save tabs to localStorage
+const saveTabs = () => {
+  localStorage.setItem('droneblocks_tabs', JSON.stringify(tabs.value));
+  localStorage.setItem('droneblocks_active_tab', activeTabId.value.toString());
+  localStorage.setItem('droneblocks_next_tab_id', nextTabId.value.toString());
+};
+
+// Tab management
+const addTab = () => {
+  const newTab = {
+    id: nextTabId.value,
+    name: `Mission ${nextTabId.value}`,
+    workspace: null
+  };
+  tabs.value.push(newTab);
+  nextTabId.value++;
+  activeTabId.value = newTab.id;
+
+  saveTabs();
+
+  // Load workspace for new tab
+  setTimeout(() => {
+    loadWorkspaceForTab(newTab.id);
+  }, 100);
+};
+
+const removeTab = (tabId: number) => {
+  if (tabs.value.length === 1) return; // Don't remove last tab
+
+  const index = tabs.value.findIndex(t => t.id === tabId);
+  if (index !== -1) {
+    // Remove workspace from localStorage
+    localStorage.removeItem(`droneblocks_mission_${tabId}`);
+
+    tabs.value.splice(index, 1);
+
+    // Switch to another tab
+    if (activeTabId.value === tabId) {
+      activeTabId.value = tabs.value[Math.max(0, index - 1)].id;
+      loadWorkspaceForTab(activeTabId.value);
+    }
+
+    saveTabs();
+  }
+};
+
+const switchTab = (tabId: number) => {
+  if (activeTabId.value === tabId) return;
+
+  // Save current workspace
+  saveWorkspace();
+
+  // Switch to new tab
+  activeTabId.value = tabId;
+  saveTabs();
+  loadWorkspaceForTab(tabId);
+
+  // Resize Blockly after tab switch
+  setTimeout(() => {
+    if (foo.value && foo.value.workspace) {
+      Blockly.svgResize(foo.value.workspace);
+    }
+  }, 100);
+};
+
+const renameTab = (tabId: number, newName: string) => {
+  const tab = tabs.value.find(t => t.id === tabId);
+  if (tab) {
+    tab.name = newName;
+  }
+};
+
 // Save workspace to localStorage
 const saveWorkspace = () => {
   if (foo.value && foo.value.workspace) {
     const xml = Blockly.Xml.workspaceToDom(foo.value.workspace);
     const xmlText = Blockly.Xml.domToText(xml);
-    localStorage.setItem('droneblocks_mission', xmlText);
-    console.log('💾 Mission saved to localStorage');
+    localStorage.setItem(`droneblocks_mission_${activeTabId.value}`, xmlText);
+    console.log(`💾 Mission saved to localStorage (Tab ${activeTabId.value})`);
   }
 };
 
 // Load workspace from localStorage
 const loadWorkspace = () => {
+  loadWorkspaceForTab(activeTabId.value);
+};
+
+const loadWorkspaceForTab = (tabId: number) => {
   if (foo.value && foo.value.workspace) {
-    const xmlText = localStorage.getItem('droneblocks_mission');
+    // First, clear the workspace completely
+    foo.value.workspace.clear();
+
+    const xmlText = localStorage.getItem(`droneblocks_mission_${tabId}`);
     if (xmlText) {
       try {
         const xml = Blockly.utils.xml.textToDom(xmlText);
-        Blockly.Xml.clearWorkspaceAndLoadFromXml(xml, foo.value.workspace);
-        console.log('📂 Mission loaded from localStorage');
+        Blockly.Xml.domToWorkspace(xml, foo.value.workspace);
+        console.log(`📂 Mission loaded from localStorage (Tab ${tabId})`);
       } catch (error) {
         console.error('Failed to load mission from localStorage:', error);
+        foo.value.workspace.clear();
       }
     }
+
+    // Force a resize after loading
+    setTimeout(() => {
+      if (foo.value && foo.value.workspace) {
+        Blockly.svgResize(foo.value.workspace);
+      }
+    }, 50);
   }
+};
+
+// Open keyboard control
+const openKeyboardControl = () => {
+  showMenu.value = false;
+  showKeyboardControl.value = true;
 };
 
 // Clear workspace
 const clearWorkspace = () => {
   if (foo.value && foo.value.workspace) {
     foo.value.workspace.clear();
-    localStorage.removeItem('droneblocks_mission');
+    localStorage.removeItem(`droneblocks_mission_${activeTabId.value}`);
     console.log('🗑️ Workspace cleared');
   }
 };
@@ -1011,6 +1409,17 @@ onMounted(() => {
   // Load saved mission after a short delay to ensure workspace is ready
   setTimeout(() => {
     loadWorkspace();
+
+    // Resize Blockly to account for tabs - do it multiple times to ensure it takes
+    if (foo.value && foo.value.workspace) {
+      Blockly.svgResize(foo.value.workspace);
+      setTimeout(() => {
+        Blockly.svgResize(foo.value.workspace);
+      }, 100);
+      setTimeout(() => {
+        Blockly.svgResize(foo.value.workspace);
+      }, 300);
+    }
 
     // Auto-save on workspace changes
     if (foo.value && foo.value.workspace) {
@@ -1059,19 +1468,43 @@ onUnmounted(() => {
           <FlightModeDisplay v-if="ros" :ros="ros" />
           <span v-else class="telemetry-item">Mode: Unknown</span>
         </div>
-        <NEDPositionDisplay v-if="ros && connected" :ros="ros" />
+        <div v-if="connected" class="telemetry-item apriltag-indicator">
+          <span class="apriltag-label">🏷️ Tag:</span>
+          <span class="apriltag-value" :class="{ 'tag-detected': currentAprilTagId >= 0 }">
+            {{ currentAprilTagId >= 0 ? currentAprilTagId : 'None' }}
+          </span>
+        </div>
+        <div v-if="connected" class="telemetry-item ned-position">
+          <span>N: {{ nedNorth.toFixed(1) }}</span>
+          <span>E: {{ nedEast.toFixed(1) }}</span>
+          <span>D: {{ nedDown.toFixed(1) }}</span>
+        </div>
       </div>
 
       <div class="header-right">
-        <button @click="showLessonPicker = true" class="icon-btn tutorial-btn" title="Tutorials">
-          🎓
+        <button @click="showLessonPicker = true" class="secondary-btn tutorial-btn" title="Tutorials">
+          📚 Tutorials
         </button>
-        <button @click="runMission" :disabled="!connected" class="primary-btn">
-          ▶ Run
+        <button
+          @click="isMissionRunning ? stopMission() : runMission()"
+          :disabled="!connected"
+          :class="isMissionRunning ? 'danger-btn' : 'primary-btn'"
+        >
+          {{ isMissionRunning ? '⏹ Stop' : '🚀 Launch' }}
         </button>
-        <button @click="stopMission" :disabled="!connected" class="danger-btn">
-          ⏹ Stop
-        </button>
+        <div class="menu-container">
+          <button @click="showMenu = !showMenu" class="icon-btn menu-btn" title="Menu">
+            ☰
+          </button>
+          <Transition name="menu-fade">
+            <div v-if="showMenu" class="dropdown-menu">
+              <button @click="openKeyboardControl" class="menu-item">
+                <span>⌨️</span>
+                <span>Keyboard Control</span>
+              </button>
+            </div>
+          </Transition>
+        </div>
       </div>
     </div>
 
@@ -1084,11 +1517,40 @@ onUnmounted(() => {
 
     <div class="split-container">
       <div class="blockly-panel" :style="{ width: leftPanelWidth + '%' }">
-        <blockly-component
-          id="blockly2"
-          :options="options"
-          ref="foo"
-        ></blockly-component>
+        <!-- Tabs -->
+        <div class="tabs-container">
+          <div class="tabs-list">
+            <div
+              v-for="tab in tabs"
+              :key="tab.id"
+              class="tab"
+              :class="{ active: tab.id === activeTabId }"
+              @click="switchTab(tab.id)"
+            >
+              <span class="tab-name">{{ tab.name }}</span>
+              <button
+                v-if="tabs.length > 1"
+                @click.stop="removeTab(tab.id)"
+                class="tab-close"
+                title="Close tab"
+              >
+                ×
+              </button>
+            </div>
+            <button @click="addTab" class="tab-add" title="New tab">
+              +
+            </button>
+          </div>
+        </div>
+
+        <!-- Blockly Workspace Container -->
+        <div class="blockly-workspace-container">
+          <blockly-component
+            id="blockly2"
+            :options="options"
+            ref="foo"
+          ></blockly-component>
+        </div>
       </div>
 
       <div class="divider" @mousedown="startDragging" :class="{ dragging: isDragging }">
@@ -1110,6 +1572,14 @@ onUnmounted(() => {
     <TutorialModal />
     <TutorialHighlight />
     <TutorialLessonPicker :show="showLessonPicker" @close="showLessonPicker = false" />
+
+    <!-- Keyboard Control -->
+    <KeyboardControl
+      v-if="ros && connected"
+      :ros="ros"
+      :isOpen="showKeyboardControl"
+      @close="showKeyboardControl = false"
+    />
   </div>
 </template>
 
@@ -1216,6 +1686,38 @@ onUnmounted(() => {
   border: 1px solid rgba(42, 157, 143, 0.3);
 }
 
+.apriltag-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.apriltag-label {
+  opacity: 0.8;
+}
+
+.apriltag-value {
+  font-weight: bold;
+  color: rgba(255, 255, 255, 0.5);
+  transition: color 0.3s ease;
+}
+
+.apriltag-value.tag-detected {
+  color: #4ade80;
+  text-shadow: 0 0 8px rgba(74, 222, 128, 0.4);
+}
+
+.ned-position {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+  font-family: 'Courier New', monospace;
+}
+
+.ned-position span {
+  opacity: 0.9;
+}
+
 .header-right {
   display: flex;
   gap: 0.5rem;
@@ -1292,15 +1794,121 @@ button:disabled {
 .blockly-panel {
   height: 100%;
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
-#blockly2 {
-  position: absolute;
-  top: 0;
-  left: 0;
+/* Tabs */
+.tabs-container {
+  background: #f5f5f5;
+  border-bottom: 1px solid #ddd;
+  padding: 0;
+  flex-shrink: 0;
+  z-index: 1001;
+  position: relative;
+}
+
+.tabs-list {
+  display: flex;
+  align-items: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: #e0e0e0;
+  border-right: 1px solid #ccc;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.tab:hover {
+  background: #d5d5d5;
+}
+
+.tab.active {
+  background: white;
+  border-bottom: 2px solid #2a9d8f;
+}
+
+.tab-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #333;
+}
+
+.tab-close {
+  background: transparent;
+  border: none;
+  color: #666;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  transition: all 0.2s;
+}
+
+.tab-close:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: #e76f51;
+}
+
+.tab-add {
+  background: transparent;
+  border: none;
+  color: #2a9d8f;
+  font-size: 1.25rem;
+  font-weight: bold;
+  cursor: pointer;
+  padding: 0.5rem 1rem;
+  transition: background 0.2s;
+}
+
+.tab-add:hover {
+  background: rgba(42, 157, 143, 0.1);
+}
+
+.blockly-workspace-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.blockly-workspace-container > blockly-component {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.blockly-workspace-container > blockly-component > div {
   width: 100%;
   height: 100%;
 }
+
+#blockly2 {
+  width: 100%;
+  height: 100%;
+}
+
+.blocklyDiv {
+  position: relative !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
 
 .divider {
   width: 8px;
@@ -1375,5 +1983,60 @@ button:disabled {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+/* Menu Container and Dropdown */
+.menu-container {
+  position: relative;
+}
+
+.menu-btn {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 200px;
+  overflow: hidden;
+  z-index: 1000;
+}
+
+.menu-item {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: white;
+  color: #333;
+  border: none;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+  text-align: left;
+  transition: background 0.2s;
+}
+
+.menu-item:hover {
+  background: #f3f4f6;
+}
+
+.menu-item span:first-child {
+  font-size: 1.25rem;
+}
+
+.menu-fade-enter-active,
+.menu-fade-leave-active {
+  transition: all 0.2s ease;
+}
+
+.menu-fade-enter-from,
+.menu-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
 }
 </style>

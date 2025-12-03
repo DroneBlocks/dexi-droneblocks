@@ -27,25 +27,17 @@
             <div class="instruction-icon">💡</div>
             <p>{{ currentStep.instruction }}</p>
           </div>
-
-          <!-- Hints Section -->
-          <div v-if="currentStep.hints && currentStep.hints.length > 0" class="hints-section">
-            <button @click="showHints = !showHints" class="hints-toggle">
-              {{ showHints ? '🔽' : '▶️' }} Need a hint?
-            </button>
-            <Transition name="slide">
-              <div v-if="showHints" class="hints-list">
-                <div v-for="(hint, index) in currentStep.hints" :key="index" class="hint-item">
-                  <span class="hint-number">{{ index + 1 }}.</span>
-                  <span>{{ hint }}</span>
-                </div>
-              </div>
-            </Transition>
-          </div>
         </div>
 
         <!-- Actions -->
         <div class="tutorial-actions">
+          <button
+            v-if="!currentStep.autoAdvance"
+            @click="handleSkip"
+            class="btn-skip"
+          >
+            Skip
+          </button>
           <button
             v-if="currentStepIndex > 0"
             @click="handlePrevious"
@@ -54,13 +46,6 @@
             ← Previous
           </button>
           <div class="spacer"></div>
-          <button
-            v-if="!currentStep.autoAdvance"
-            @click="handleSkip"
-            class="btn-skip"
-          >
-            Skip
-          </button>
           <button
             v-if="!isLastStep"
             @click="handleNext"
@@ -133,24 +118,18 @@ function handleComplete() {
 
   const nextLesson = getNextLesson();
   if (nextLesson) {
-    // Show completion message with option to continue
+    // Automatically continue to next lesson
     setTimeout(() => {
-      if (confirm(`${currentLesson.value?.completionMessage}\n\nWould you like to continue to the next lesson: "${nextLesson.title}"?`)) {
-        tutorial.startLesson(nextLesson.id);
-      } else {
-        exitLesson();
-      }
+      tutorial.startLesson(nextLesson.id);
     }, 100);
   } else {
-    alert(`${currentLesson.value?.completionMessage}\n\nCongratulations! You've completed all tutorials!`);
+    // All tutorials completed
     exitLesson();
   }
 }
 
 function handleExit() {
-  if (confirm('Are you sure you want to exit the tutorial? Your progress will be saved.')) {
-    exitLesson();
-  }
+  exitLesson();
 }
 </script>
 

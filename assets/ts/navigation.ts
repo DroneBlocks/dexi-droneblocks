@@ -14,6 +14,15 @@ export class Navigation {
         "helpUrl": ""
       },
       {
+        "type": "nav_disarm",
+        "message0": "disarm",
+        "colour": "#2A9D8F",
+        "previousStatement": null,
+        "nextStatement": null,
+        "tooltip": "Disarm the vehicle",
+        "helpUrl": ""
+      },
+      {
         "type": "nav_start_offboard_heartbeat",
         "message0": "start offboard heartbeat",
         "colour": "#2A9D8F",
@@ -362,6 +371,17 @@ offboardCommand.publish({
   distance_or_degrees: 0.0
 });
 await new Promise(resolve => setTimeout(resolve, 1000)); // Wait for arming
+`;
+    }
+
+    javascriptGenerator.forBlock['nav_disarm'] = function(block: Blockly.Block, generator: JavascriptGenerator) {
+      return `
+// Disarm vehicle
+offboardCommand.publish({
+  command: 'disarm',
+  distance_or_degrees: 0.0
+});
+await new Promise(resolve => setTimeout(resolve, 1000)); // Wait for disarming
 `;
     }
 

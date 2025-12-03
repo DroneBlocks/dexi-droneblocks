@@ -158,10 +158,10 @@ const keyMappings = {
   'W': { command: 'fly_up', distance_or_degrees: 1.0 },
   's': { command: 'fly_down', distance_or_degrees: 1.0 },
   'S': { command: 'fly_down', distance_or_degrees: 1.0 },
-  'a': { command: 'yaw_left', distance_or_degrees: 15.0 },
-  'A': { command: 'yaw_left', distance_or_degrees: 15.0 },
-  'd': { command: 'yaw_right', distance_or_degrees: 15.0 },
-  'D': { command: 'yaw_right', distance_or_degrees: 15.0 },
+  'a': { command: 'yaw_left', distance_or_degrees: 90.0 },
+  'A': { command: 'yaw_left', distance_or_degrees: 90.0 },
+  'd': { command: 'yaw_right', distance_or_degrees: 90.0 },
+  'D': { command: 'yaw_right', distance_or_degrees: 90.0 },
 
   // Right stick - Pitch/Roll (Arrow keys)
   'ArrowUp': { command: 'fly_forward', distance_or_degrees: 1.0 },

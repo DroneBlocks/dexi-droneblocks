@@ -8,22 +8,6 @@
         </div>
 
         <div class="picker-content">
-          <!-- Progress Summary -->
-          <div class="progress-summary">
-            <div class="summary-stat">
-              <span class="stat-number">{{ progress.completedLessons.length }}</span>
-              <span class="stat-label">Completed</span>
-            </div>
-            <div class="summary-stat">
-              <span class="stat-number">{{ availableLessons.length }}</span>
-              <span class="stat-label">Available</span>
-            </div>
-            <div class="summary-stat">
-              <span class="stat-number">{{ allLessons.length }}</span>
-              <span class="stat-label">Total</span>
-            </div>
-          </div>
-
           <!-- Lesson Categories -->
           <div
             v-for="category in ['beginner', 'intermediate', 'advanced']"
@@ -81,7 +65,7 @@ defineProps<{
   show: boolean;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   close: [];
 }>();
 
@@ -106,11 +90,12 @@ function handleLessonClick(lessonId: string) {
   const lessonProgress = getLessonProgress(lessonId);
 
   if (!lessonProgress.canStart) {
-    alert('You must complete the prerequisite lesson first!');
+    // Don't start locked lessons
     return;
   }
 
   startLesson(lessonId);
+  emit('close');
 }
 
 function handleResetProgress() {

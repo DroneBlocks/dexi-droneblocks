@@ -48,7 +48,6 @@ export const lessons: TutorialLesson[] = [
     description: 'Understand drone safety and learn how to arm your drone for flight.',
     estimatedMinutes: 5,
     icon: '🛡️',
-    prerequisite: 'lesson-1-connection',
     completionMessage: 'Excellent! You now know how to safely arm your drone.',
     steps: [
       {
@@ -98,7 +97,6 @@ export const lessons: TutorialLesson[] = [
     description: 'Learn about offboard control requirements and why the heartbeat is critical.',
     estimatedMinutes: 7,
     icon: '💓',
-    prerequisite: 'lesson-2-arming',
     completionMessage: 'Perfect! You understand the critical safety system that enables autonomous flight.',
     steps: [
       {
@@ -126,15 +124,15 @@ export const lessons: TutorialLesson[] = [
         id: 'add-heartbeat',
         title: 'Start the Heartbeat',
         description: 'This block starts sending regular signals to the drone.',
-        instruction: 'From the "Navigation" category (teal), drag the "Start offboard heartbeat" block to the workspace.',
+        instruction: 'From the "Offboard" category on the left, drag the "Start offboard heartbeat" block to the workspace.',
         highlightBlocks: ['nav_start_offboard_heartbeat'],
-        hints: ['Look in the Navigation category', 'It should be near the top'],
+        hints: ['Look in the Offboard category', 'It should be near the top'],
       },
       {
         id: 'add-offboard-switch',
         title: 'Switch to Offboard Mode',
         description: 'This command tells the drone to enter offboard mode.',
-        instruction: 'Drag the "Switch to offboard mode" block and connect it below the heartbeat block.',
+        instruction: 'From the "Offboard" category, drag the "Switch to offboard mode" block and connect it below the heartbeat block.',
         highlightBlocks: ['nav_switch_offboard_mode'],
         hints: ['Blocks snap together when you drag them close', 'Make sure they\'re connected in order'],
       },
@@ -146,10 +144,18 @@ export const lessons: TutorialLesson[] = [
         highlightBlocks: ['nav_arm'],
       },
       {
+        id: 'add-takeoff-offboard',
+        title: 'Add Takeoff',
+        description: 'Let\'s get DEXI in the air!',
+        instruction: 'From the Takeoff category, add a "Takeoff" block and set the altitude to 2 meters. Connect it to the bottom of your sequence.',
+        highlightBlocks: ['nav_takeoff'],
+        hints: ['The takeoff block should be the last in your sequence', 'Click the number to change altitude'],
+      },
+      {
         id: 'run-sequence',
-        title: 'Run the Pre-Flight Sequence',
-        description: 'Execute all three commands in order.',
-        instruction: 'Click "▶ Run Mission" to execute: start heartbeat → switch to offboard → arm.',
+        title: 'Run the Complete Sequence',
+        description: 'Execute all commands and watch DEXI take off!',
+        instruction: 'Click "▶ Run Mission" to execute: start heartbeat → switch to offboard → arm → takeoff to 2m.',
         highlightElement: '.run-btn',
       },
     ],
@@ -161,7 +167,6 @@ export const lessons: TutorialLesson[] = [
     description: 'Make your drone take off to a specified altitude.',
     estimatedMinutes: 5,
     icon: '🚁',
-    prerequisite: 'lesson-3-offboard',
     completionMessage: 'Amazing! Your drone just completed its first flight!',
     steps: [
       {
@@ -216,7 +221,6 @@ export const lessons: TutorialLesson[] = [
     description: 'Learn to control the LED ring on your drone.',
     estimatedMinutes: 4,
     icon: '💡',
-    prerequisite: 'lesson-4-takeoff',
     completionMessage: 'Colorful! You can now add visual effects to your drone missions.',
     steps: [
       {
@@ -265,7 +269,6 @@ export const lessons: TutorialLesson[] = [
     description: 'Move your drone in different directions and create a simple flight path.',
     estimatedMinutes: 8,
     icon: '🧭',
-    prerequisite: 'lesson-5-led',
     completionMessage: 'Excellent navigation! You can now create complex flight paths.',
     steps: [
       {
@@ -328,7 +331,6 @@ export const lessons: TutorialLesson[] = [
     description: 'Use loops to create repeating flight patterns efficiently.',
     estimatedMinutes: 10,
     icon: '🔁',
-    prerequisite: 'lesson-6-navigation',
     completionMessage: 'Outstanding! You\'ve mastered loops and can create complex patterns with minimal blocks.',
     steps: [
       {
@@ -392,7 +394,6 @@ export const lessons: TutorialLesson[] = [
     description: 'Use AprilTag detection to create smart, reactive missions.',
     estimatedMinutes: 12,
     icon: '📷',
-    prerequisite: 'lesson-7-loops',
     completionMessage: 'Incredible! You\'ve mastered computer vision integration. You can now create truly intelligent autonomous missions!',
     steps: [
       {
