@@ -557,8 +557,12 @@ const options = {
 
 const connectToROS = () => {
   try {
+    // Use dynamic hostname for ROS connection
+    const hostname = process.client ? window.location.hostname : 'localhost';
+    const rosUrl = `ws://${hostname}:9090`;
+
     ros.value = new ROSLIB.Ros({
-      url: 'ws://localhost:9090'
+      url: rosUrl
     });
 
     ros.value.on('connection', () => {
