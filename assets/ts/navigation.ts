@@ -7,7 +7,7 @@ export class Navigation {
       {
         "type": "nav_arm",
         "message0": "arm",
-        "colour": "#2A9D8F",
+        "colour": "#6366F1",
         "previousStatement": null,
         "nextStatement": null,
         "tooltip": "Arm the vehicle",
@@ -16,7 +16,7 @@ export class Navigation {
       {
         "type": "nav_disarm",
         "message0": "disarm",
-        "colour": "#2A9D8F",
+        "colour": "#6366F1",
         "previousStatement": null,
         "nextStatement": null,
         "tooltip": "Disarm the vehicle",
@@ -25,7 +25,7 @@ export class Navigation {
       {
         "type": "nav_start_offboard_heartbeat",
         "message0": "start offboard heartbeat",
-        "colour": "#2A9D8F",
+        "colour": "#6366F1",
         "previousStatement": null,
         "nextStatement": null,
         "tooltip": "Start sending offboard control signals",
@@ -34,7 +34,7 @@ export class Navigation {
       {
         "type": "nav_stop_offboard_heartbeat",
         "message0": "stop offboard heartbeat",
-        "colour": "#2A9D8F",
+        "colour": "#6366F1",
         "previousStatement": null,
         "nextStatement": null,
         "tooltip": "Stop sending offboard control signals",
@@ -43,7 +43,7 @@ export class Navigation {
       {
         "type": "nav_switch_offboard_mode",
         "message0": "switch to offboard mode",
-        "colour": "#2A9D8F",
+        "colour": "#6366F1",
         "previousStatement": null,
         "nextStatement": null,
         "tooltip": "Switch flight mode to offboard",
@@ -52,7 +52,7 @@ export class Navigation {
       {
         "type": "nav_switch_hold_mode",
         "message0": "switch to hold mode",
-        "colour": "#2A9D8F",
+        "colour": "#6366F1",
         "previousStatement": null,
         "nextStatement": null,
         "tooltip": "Switch to automatic position hold (loiter)",
@@ -68,7 +68,7 @@ export class Navigation {
             "check": "Number"
           }
         ],
-        "colour": "#264653",
+        "colour": "#4CAF50",
         "previousStatement": null,
         "nextStatement": null,
         "tooltip": "Takeoff to specified altitude using offboard mode",
@@ -77,7 +77,7 @@ export class Navigation {
       {
         "type": "nav_land",
         "message0": "land",
-        "colour": "#E76F51",
+        "colour": "#E74C3C",
         "previousStatement": null,
         "nextStatement": null,
         "tooltip": "Land at current position",
@@ -93,7 +93,7 @@ export class Navigation {
             "check": "Number"
           }
         ],
-        "colour": "#2A9D8F",
+        "colour": "#3B82F6",
         "previousStatement": null,
         "nextStatement": null,
         "tooltip": "Fly forward by specified distance",
@@ -109,7 +109,7 @@ export class Navigation {
             "check": "Number"
           }
         ],
-        "colour": "#2A9D8F",
+        "colour": "#3B82F6",
         "previousStatement": null,
         "nextStatement": null,
         "tooltip": "Fly backward by specified distance",
@@ -125,7 +125,7 @@ export class Navigation {
             "check": "Number"
           }
         ],
-        "colour": "#2A9D8F",
+        "colour": "#3B82F6",
         "previousStatement": null,
         "nextStatement": null,
         "tooltip": "Fly left by specified distance",
@@ -141,7 +141,7 @@ export class Navigation {
             "check": "Number"
           }
         ],
-        "colour": "#2A9D8F",
+        "colour": "#3B82F6",
         "previousStatement": null,
         "nextStatement": null,
         "tooltip": "Fly right by specified distance",
@@ -157,7 +157,7 @@ export class Navigation {
             "check": "Number"
           }
         ],
-        "colour": "#2A9D8F",
+        "colour": "#3B82F6",
         "previousStatement": null,
         "nextStatement": null,
         "tooltip": "Fly up by specified distance",
@@ -173,7 +173,7 @@ export class Navigation {
             "check": "Number"
           }
         ],
-        "colour": "#2A9D8F",
+        "colour": "#3B82F6",
         "previousStatement": null,
         "nextStatement": null,
         "tooltip": "Fly down by specified distance",
@@ -189,7 +189,7 @@ export class Navigation {
             "check": "Number"
           }
         ],
-        "colour": "#2A9D8F",
+        "colour": "#3B82F6",
         "previousStatement": null,
         "nextStatement": null,
         "tooltip": "Rotate left by specified degrees",
@@ -205,7 +205,7 @@ export class Navigation {
             "check": "Number"
           }
         ],
-        "colour": "#2A9D8F",
+        "colour": "#3B82F6",
         "previousStatement": null,
         "nextStatement": null,
         "tooltip": "Rotate right by specified degrees",
@@ -221,7 +221,7 @@ export class Navigation {
             "check": "Number"
           }
         ],
-        "colour": "#2A9D8F",
+        "colour": "#3B82F6",
         "previousStatement": null,
         "nextStatement": null,
         "tooltip": "Wait for specified number of seconds",
@@ -269,7 +269,7 @@ export class Navigation {
             "check": "Number"
           }
         ],
-        "colour": "#FF6B6B",
+        "colour": "#E74C3C",
         "previousStatement": null,
         "nextStatement": null,
         "tooltip": "Wait specified seconds then land",
@@ -285,7 +285,7 @@ export class Navigation {
             "check": "Number"
           }
         ],
-        "colour": "#FF6B6B",
+        "colour": "#E74C3C",
         "previousStatement": null,
         "nextStatement": null,
         "tooltip": "Land, wait specified seconds, then takeoff again",
@@ -317,7 +317,7 @@ export class Navigation {
             "align": "RIGHT"
           }
         ],
-        "colour": "#E76F51",
+        "colour": "#3B82F6",
         "previousStatement": null,
         "nextStatement": null,
         "tooltip": "Fly to absolute NED position (North, East, Down in meters)",
@@ -355,7 +355,7 @@ export class Navigation {
             "align": "RIGHT"
           }
         ],
-        "colour": "#E76F51",
+        "colour": "#3B82F6",
         "previousStatement": null,
         "nextStatement": null,
         "tooltip": "Fly to absolute NED position with specified yaw angle",

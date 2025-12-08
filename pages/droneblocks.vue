@@ -6,6 +6,7 @@ import { LED } from '~/assets/ts/led';
 import { AprilTag } from '~/assets/ts/apriltag';
 import { javascriptGenerator } from 'blockly/javascript';
 import ROSLIB from 'roslib';
+import { useROS } from '~/composables/useROS';
 import { useTutorial } from '~/tutorial';
 import TutorialWelcome from '~/tutorial/components/TutorialWelcome.vue';
 import TutorialModal from '~/tutorial/components/TutorialModal.vue';
@@ -109,16 +110,15 @@ const options = {
     scaleSpeed: 1.2
   },
   toolbox: `<xml>
-    <category name="Flight Control" colour="#2A9D8F" expanded="true">
-      <category name="Offboard" colour="#2A9D8F">
+    <category name="Setup" colour="#6366F1">
+        <block type="nav_arm"></block>
+        <block type="nav_disarm"></block>
         <block type="nav_start_offboard_heartbeat"></block>
         <block type="nav_stop_offboard_heartbeat"></block>
         <block type="nav_switch_offboard_mode"></block>
         <block type="nav_switch_hold_mode"></block>
       </category>
       <category name="Takeoff" colour="#4CAF50">
-        <block type="nav_arm"></block>
-        <block type="nav_disarm"></block>
         <block type="nav_takeoff">
           <value name="ALTITUDE">
             <shadow type="math_number">
@@ -141,7 +141,7 @@ const options = {
           </value>
         </block>
       </category>
-      <category name="Navigation" colour="#E76F51">
+      <category name="Navigation" colour="#3B82F6">
       <block type="nav_fly_forward">
         <value name="DISTANCE">
           <shadow type="math_number">
@@ -245,7 +245,7 @@ const options = {
         </value>
       </block>
       </category>
-      <category name="Land" colour="#FF6B6B">
+      <category name="Land" colour="#E74C3C">
         <block type="nav_land"></block>
         <block type="nav_land_after">
           <value name="DELAY">
@@ -262,7 +262,6 @@ const options = {
           </value>
         </block>
       </category>
-    </category>
     <category name="LED" colour="#9C27B0">
       <block type="led_effect">
         <field name="effect">rainbow</field>
@@ -555,14 +554,12 @@ const options = {
   </xml>`,
 };
 
+const { getROSURL } = useROS();
+
 const connectToROS = () => {
   try {
-    // Use dynamic hostname for ROS connection
-    const hostname = process.client ? window.location.hostname : 'localhost';
-    const rosUrl = `ws://${hostname}:9090`;
-
     ros.value = new ROSLIB.Ros({
-      url: rosUrl
+      url: getROSURL()
     });
 
     ros.value.on('connection', () => {
@@ -1044,7 +1041,7 @@ const runMission = async () => {
                 } else if (innerBlockType === 'led_effect') {
                   const effect = currentBlock.getFieldValue('effect');
                   if (ledEffectService.value) {
-                    const request = new ROSLIB.ServiceRequest({ effect: effect });
+                    const request = new ROSLIB.ServiceRequest({ effect_name: effect });
                     await new Promise((resolve, reject) => {
                       ledEffectService.value!.callService(request, (response: any) => {
                         console.log(`✅ LED effect set to ${effect}`);
@@ -1080,6 +1077,39 @@ const runMission = async () => {
                   }
                   console.log(`⏱️ Waiting ${duration} seconds...`);
                   await new Promise(resolve => setTimeout(resolve, duration * 1000));
+                } else if (innerBlockType === 'nav_fly_forward') {
+                  const distance = getInputValue(currentBlock, 'DISTANCE', 1.0);
+                  await executeCommandWithService('fly_forward', distance, 30);
+                } else if (innerBlockType === 'nav_fly_backward') {
+                  const distance = getInputValue(currentBlock, 'DISTANCE', 1.0);
+                  await executeCommandWithService('fly_backward', distance, 30);
+                } else if (innerBlockType === 'nav_fly_left') {
+                  const distance = getInputValue(currentBlock, 'DISTANCE', 1.0);
+                  await executeCommandWithService('fly_left', distance, 30);
+                } else if (innerBlockType === 'nav_fly_right') {
+                  const distance = getInputValue(currentBlock, 'DISTANCE', 1.0);
+                  await executeCommandWithService('fly_right', distance, 30);
+                } else if (innerBlockType === 'nav_fly_up') {
+                  const distance = getInputValue(currentBlock, 'DISTANCE', 1.0);
+                  await executeCommandWithService('fly_up', distance, 30);
+                } else if (innerBlockType === 'nav_fly_down') {
+                  const distance = getInputValue(currentBlock, 'DISTANCE', 1.0);
+                  await executeCommandWithService('fly_down', distance, 30);
+                } else if (innerBlockType === 'nav_yaw_left') {
+                  const degrees = getInputValue(currentBlock, 'DEGREES', 90);
+                  await executeCommandWithService('yaw_left', degrees, 10);
+                } else if (innerBlockType === 'nav_yaw_right') {
+                  const degrees = getInputValue(currentBlock, 'DEGREES', 90);
+                  await executeCommandWithService('yaw_right', degrees, 10);
+                } else if (innerBlockType === 'nav_takeoff') {
+                  const altitude = getInputValue(currentBlock, 'ALTITUDE', 2.0);
+                  await executeCommandWithService('takeoff', altitude, 30);
+                } else if (innerBlockType === 'nav_land') {
+                  await executeCommandWithService('land', 0, 30);
+                } else if (innerBlockType === 'nav_arm') {
+                  await executeCommandWithService('arm', 0, 10);
+                } else if (innerBlockType === 'nav_disarm') {
+                  await executeCommandWithService('disarm', 0, 10);
                 }
 
                 currentBlock = currentBlock.getNextBlock();
@@ -1186,7 +1216,7 @@ const runMission = async () => {
                 } else if (innerBlockType === 'led_effect') {
                   const effect = currentBlock.getFieldValue('effect');
                   if (ledEffectService.value) {
-                    const request = new ROSLIB.ServiceRequest({ effect: effect });
+                    const request = new ROSLIB.ServiceRequest({ effect_name: effect });
                     await new Promise((resolve, reject) => {
                       ledEffectService.value!.callService(request, (response: any) => {
                         console.log(`✅ LED effect set to ${effect}`);
@@ -1604,6 +1634,20 @@ onUnmounted(() => {
 .blocklyScrollbarHorizontal {
   display: none !important;
 }
+
+/* Make toolbox categories taller and vertically centered */
+.blocklyTreeRow {
+  height: 38px !important;
+  min-height: 38px !important;
+  padding: 0 8px !important;
+}
+
+.blocklyTreeLabel {
+  font-size: 15px !important;
+  font-weight: 500 !important;
+  line-height: 38px !important;
+  vertical-align: middle !important;
+}
 </style>
 
 <style scoped>
@@ -1829,6 +1873,7 @@ button:disabled {
 .tab {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
   padding: 0.5rem 1rem;
   background: #e0e0e0;
@@ -1837,6 +1882,7 @@ button:disabled {
   transition: background 0.2s;
   white-space: nowrap;
   user-select: none;
+  min-height: 40px;
 }
 
 .tab:hover {
