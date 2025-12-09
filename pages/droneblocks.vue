@@ -13,6 +13,7 @@ import TutorialModal from '~/tutorial/components/TutorialModal.vue';
 import TutorialHighlight from '~/tutorial/components/TutorialHighlight.vue';
 import TutorialLessonPicker from '~/tutorial/components/TutorialLessonPicker.vue';
 import KeyboardControl from '~/components/KeyboardControl.vue';
+import CameraFeed from '~/components/CameraFeed.vue';
 
 const navigation = new Navigation();
 const led = new LED();
@@ -25,6 +26,9 @@ const showLessonPicker = ref(false);
 // Menu and keyboard control
 const showMenu = ref(false);
 const showKeyboardControl = ref(false);
+
+// View mode: 'simulator' or 'drone'
+const viewMode = ref<'simulator' | 'drone'>('simulator');
 
 // Load tabs from localStorage or use default
 const loadTabsFromStorage = () => {
@@ -1433,6 +1437,12 @@ const openKeyboardControl = () => {
   showKeyboardControl.value = true;
 };
 
+// Toggle view mode
+const toggleViewMode = () => {
+  viewMode.value = viewMode.value === 'simulator' ? 'drone' : 'simulator';
+  localStorage.setItem('droneblocks_view_mode', viewMode.value);
+};
+
 // Clear workspace
 const clearWorkspace = () => {
   if (foo.value && foo.value.workspace) {
@@ -1443,6 +1453,12 @@ const clearWorkspace = () => {
 };
 
 onMounted(() => {
+  // Load saved view mode
+  const savedViewMode = localStorage.getItem('droneblocks_view_mode');
+  if (savedViewMode === 'drone' || savedViewMode === 'simulator') {
+    viewMode.value = savedViewMode;
+  }
+
   connectToROS();
   document.addEventListener('mousemove', onDrag);
   document.addEventListener('mouseup', stopDragging);
@@ -1523,6 +1539,13 @@ onUnmounted(() => {
       </div>
 
       <div class="header-right">
+        <button
+          @click="toggleViewMode"
+          class="secondary-btn view-mode-btn"
+          :title="viewMode === 'simulator' ? 'Switch to DEXI' : 'Switch to Simulator'"
+        >
+          {{ viewMode === 'simulator' ? 'Connect to DEXI' : 'Connect to Sim' }}
+        </button>
         <button @click="showLessonPicker = true" class="secondary-btn tutorial-btn" title="Tutorials">
           📚 Tutorials
         </button>
@@ -1539,6 +1562,10 @@ onUnmounted(() => {
           </button>
           <Transition name="menu-fade">
             <div v-if="showMenu" class="dropdown-menu">
+              <a href="/" class="menu-item">
+                <span>🏠</span>
+                <span>Dashboard</span>
+              </a>
               <button @click="openKeyboardControl" class="menu-item">
                 <span>⌨️</span>
                 <span>Keyboard Control</span>
@@ -1556,34 +1583,34 @@ onUnmounted(() => {
       </div>
     </Transition>
 
-    <div class="split-container">
-      <div class="blockly-panel" :style="{ width: leftPanelWidth + '%' }">
-        <!-- Tabs -->
-        <div class="tabs-container">
-          <div class="tabs-list">
-            <div
-              v-for="tab in tabs"
-              :key="tab.id"
-              class="tab"
-              :class="{ active: tab.id === activeTabId }"
-              @click="switchTab(tab.id)"
-            >
-              <span class="tab-name">{{ tab.name }}</span>
-              <button
-                v-if="tabs.length > 1"
-                @click.stop="removeTab(tab.id)"
-                class="tab-close"
-                title="Close tab"
-              >
-                ×
-              </button>
-            </div>
-            <button @click="addTab" class="tab-add" title="New tab">
-              +
-            </button>
-          </div>
+    <!-- Tabs - spans full width across both panels in simulator mode -->
+    <div class="tabs-container">
+      <div class="tabs-list">
+        <div
+          v-for="tab in tabs"
+          :key="tab.id"
+          class="tab"
+          :class="{ active: tab.id === activeTabId }"
+          @click="switchTab(tab.id)"
+        >
+          <span class="tab-name">{{ tab.name }}</span>
+          <button
+            v-if="tabs.length > 1"
+            @click.stop="removeTab(tab.id)"
+            class="tab-close"
+            title="Close tab"
+          >
+            ×
+          </button>
         </div>
+        <button @click="addTab" class="tab-add" title="New tab">
+          +
+        </button>
+      </div>
+    </div>
 
+    <div class="split-container">
+      <div class="blockly-panel" :style="{ width: viewMode === 'simulator' ? leftPanelWidth + '%' : '100%' }">
         <!-- Blockly Workspace Container -->
         <div class="blockly-workspace-container">
           <blockly-component
@@ -1591,14 +1618,19 @@ onUnmounted(() => {
             :options="options"
             ref="foo"
           ></blockly-component>
+
+          <!-- Camera Feed Overlay in Drone Mode -->
+          <div v-if="viewMode === 'drone'" class="camera-overlay">
+            <CameraFeed :should-invert="false" />
+          </div>
         </div>
       </div>
 
-      <div class="divider" @mousedown="startDragging" :class="{ dragging: isDragging }">
+      <div v-if="viewMode === 'simulator'" class="divider" @mousedown="startDragging" :class="{ dragging: isDragging }">
         <div class="divider-handle"></div>
       </div>
 
-      <div class="unity-panel" :style="{ width: (100 - leftPanelWidth) + '%' }">
+      <div v-if="viewMode === 'simulator'" class="unity-panel" :style="{ width: (100 - leftPanelWidth) + '%' }">
         <iframe
           :src="unityUrl"
           class="unity-iframe"
@@ -1825,6 +1857,21 @@ button:disabled {
   transform: translateY(-1px);
 }
 
+.secondary-btn {
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.2s ease;
+}
+
+.secondary-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
 .danger-btn {
   padding: 0.5rem 1.25rem;
   border-radius: 8px;
@@ -1853,14 +1900,15 @@ button:disabled {
   flex-direction: column;
 }
 
-/* Tabs */
+/* Tabs - now sits above split container */
 .tabs-container {
   background: #f5f5f5;
   border-bottom: 1px solid #ddd;
   padding: 0;
   flex-shrink: 0;
-  z-index: 1001;
+  z-index: 100;
   position: relative;
+  width: 100%;
 }
 
 .tabs-list {
@@ -1966,6 +2014,31 @@ button:disabled {
   height: 100% !important;
 }
 
+/* Camera Overlay */
+.camera-overlay {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 400px;
+  height: 300px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  background: black;
+}
+
+.camera-overlay :deep(.camera-container) {
+  width: 100%;
+  height: 100%;
+}
+
+.camera-overlay :deep(.camera-feed) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 
 .divider {
   width: 8px;
@@ -2061,7 +2134,7 @@ button:disabled {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   min-width: 200px;
   overflow: hidden;
-  z-index: 1000;
+  z-index: 10000;
 }
 
 .menu-item {
@@ -2076,6 +2149,8 @@ button:disabled {
   font-size: 0.875rem;
   text-align: left;
   transition: background 0.2s;
+  text-decoration: none;
+  cursor: pointer;
 }
 
 .menu-item:hover {
