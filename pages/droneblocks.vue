@@ -30,6 +30,12 @@ const showKeyboardControl = ref(false);
 // View mode: 'simulator' or 'drone'
 const viewMode = ref<'simulator' | 'drone'>('simulator');
 
+// Camera overlay state
+const cameraPosition = ref({ x: 0, y: 0 });
+const cameraEnlarged = ref(false);
+const isDraggingCamera = ref(false);
+const cameraDragStart = ref({ x: 0, y: 0 });
+
 // Load tabs from localStorage or use default
 const loadTabsFromStorage = () => {
   const savedTabs = localStorage.getItem('droneblocks_tabs');
@@ -986,6 +992,7 @@ const runMission = async () => {
           }
         } else if (blockType === 'apriltag_start_monitoring') {
           // Start monitoring AprilTags in background
+          console.log(`🔍 Starting AprilTag monitoring. Current lastDetectedTagId: ${lastDetectedTagId.value}`);
           if (!apriltagSubscription.value && ros.value) {
             apriltagSubscription.value = new ROSLIB.Topic({
               ros: ros.value as ROSLIB.Ros,
@@ -997,8 +1004,10 @@ const runMission = async () => {
               if (message.detections && message.detections.length > 0) {
                 lastDetectedTagId.value = message.detections[0].id;
                 detectedTagCount.value = message.detections.length;
+                console.log(`📷 AprilTag detected - ID: ${lastDetectedTagId.value}, Count: ${detectedTagCount.value}`);
               } else {
                 detectedTagCount.value = 0;
+                // Note: We keep lastDetectedTagId at its last value
               }
             });
             console.log('✅ Started AprilTag monitoring');
@@ -1069,6 +1078,128 @@ const runMission = async () => {
                         reject(error);
                       });
                     });
+                  }
+                } else if (innerBlockType === 'controls_if') {
+                  // Handle if/else blocks inside loops
+                  console.log('🔍 Processing if statement inside loop');
+                  const conditionBlock = currentBlock.getInputTargetBlock('IF0');
+                  let shouldExecute = false;
+
+                  if (conditionBlock && conditionBlock.type === 'logic_compare') {
+                    const operator = conditionBlock.getFieldValue('OP');
+                    const leftBlock = conditionBlock.getInputTargetBlock('A');
+                    const rightBlock = conditionBlock.getInputTargetBlock('B');
+
+                    let leftValue: any = undefined;
+                    let rightValue: any = undefined;
+
+                    // Evaluate left side
+                    if (leftBlock) {
+                      console.log(`🔍 Left block type: ${leftBlock.type}`);
+                      if (leftBlock.type === 'apriltag_get_last_id') {
+                        leftValue = lastDetectedTagId.value;
+                        console.log(`📷 Reading lastDetectedTagId: ${leftValue}`);
+                      } else if (leftBlock.type === 'apriltag_get_tag_count') {
+                        leftValue = detectedTagCount.value;
+                        console.log(`📷 Reading detectedTagCount: ${leftValue}`);
+                      } else if (leftBlock.type === 'math_number') {
+                        leftValue = parseFloat(leftBlock.getFieldValue('NUM'));
+                        console.log(`🔢 Reading number: ${leftValue}`);
+                      }
+                    }
+
+                    // Evaluate right side
+                    if (rightBlock) {
+                      console.log(`🔍 Right block type: ${rightBlock.type}`);
+                      if (rightBlock.type === 'math_number') {
+                        rightValue = parseFloat(rightBlock.getFieldValue('NUM'));
+                        console.log(`🔢 Reading number: ${rightValue}`);
+                      } else if (rightBlock.type === 'apriltag_get_last_id') {
+                        rightValue = lastDetectedTagId.value;
+                        console.log(`📷 Reading lastDetectedTagId: ${rightValue}`);
+                      } else if (rightBlock.type === 'apriltag_get_tag_count') {
+                        rightValue = detectedTagCount.value;
+                        console.log(`📷 Reading detectedTagCount: ${rightValue}`);
+                      }
+                    }
+
+                    // Evaluate condition
+                    switch (operator) {
+                      case 'EQ':
+                        shouldExecute = leftValue === rightValue;
+                        break;
+                      case 'NEQ':
+                        shouldExecute = leftValue !== rightValue;
+                        break;
+                      case 'LT':
+                        shouldExecute = leftValue < rightValue;
+                        break;
+                      case 'LTE':
+                        shouldExecute = leftValue <= rightValue;
+                        break;
+                      case 'GT':
+                        shouldExecute = leftValue > rightValue;
+                        break;
+                      case 'GTE':
+                        shouldExecute = leftValue >= rightValue;
+                        break;
+                    }
+                    console.log(`✔️ Condition: ${leftValue} ${operator} ${rightValue} = ${shouldExecute}`);
+                  }
+
+                  // Execute blocks inside if statement if condition is true
+                  if (shouldExecute) {
+                    const doBlock = currentBlock.getInputTargetBlock('DO0');
+                    if (doBlock) {
+                      let ifCurrentBlock = doBlock;
+                      while (ifCurrentBlock) {
+                        const ifBlockType = ifCurrentBlock.type;
+
+                        // Handle blocks inside if (reuse existing handlers)
+                        if (ifBlockType === 'led_ring') {
+                          const color = ifCurrentBlock.getFieldValue('color');
+                          if (ledRingColorService.value) {
+                            const request = new ROSLIB.ServiceRequest({ color: color });
+                            await new Promise((resolve, reject) => {
+                              ledRingColorService.value!.callService(request, (response: any) => {
+                                console.log(`✅ LED ring set to ${color}`);
+                                resolve(response);
+                              }, (error: any) => {
+                                console.error(`❌ LED ring color failed:`, error);
+                                reject(error);
+                              });
+                            });
+                          }
+                        } else if (ifBlockType === 'led_effect') {
+                          const effect = ifCurrentBlock.getFieldValue('effect');
+                          if (ledEffectService.value) {
+                            const request = new ROSLIB.ServiceRequest({ effect_name: effect });
+                            await new Promise((resolve, reject) => {
+                              ledEffectService.value!.callService(request, (response: any) => {
+                                console.log(`✅ LED effect set to ${effect}`);
+                                resolve(response);
+                              }, (error: any) => {
+                                console.error(`❌ LED effect failed:`, error);
+                                reject(error);
+                              });
+                            });
+                          }
+                        } else if (ifBlockType === 'nav_wait') {
+                          const durationInput = ifCurrentBlock.getInput('DURATION');
+                          let duration = 1;
+                          if (durationInput && durationInput.connection && durationInput.connection.targetBlock()) {
+                            const targetBlock = durationInput.connection.targetBlock();
+                            if (targetBlock.type === 'math_number') {
+                              duration = parseFloat(targetBlock.getFieldValue('NUM'));
+                            }
+                          }
+                          console.log(`⏱️ Waiting ${duration} seconds...`);
+                          await new Promise(resolve => setTimeout(resolve, duration * 1000));
+                        }
+
+                        ifCurrentBlock = ifCurrentBlock.getNextBlock();
+                      }
+                    }
                   }
                 } else if (innerBlockType === 'nav_wait') {
                   const durationInput = currentBlock.getInput('DURATION');
@@ -1443,6 +1574,31 @@ const toggleViewMode = () => {
   localStorage.setItem('droneblocks_view_mode', viewMode.value);
 };
 
+// Camera overlay functions
+const toggleCameraSize = () => {
+  cameraEnlarged.value = !cameraEnlarged.value;
+};
+
+const startCameraDrag = (e: MouseEvent) => {
+  isDraggingCamera.value = true;
+  cameraDragStart.value = {
+    x: e.clientX - cameraPosition.value.x,
+    y: e.clientY - cameraPosition.value.y
+  };
+};
+
+const onCameraDrag = (e: MouseEvent) => {
+  if (!isDraggingCamera.value) return;
+  cameraPosition.value = {
+    x: e.clientX - cameraDragStart.value.x,
+    y: e.clientY - cameraDragStart.value.y
+  };
+};
+
+const stopCameraDrag = () => {
+  isDraggingCamera.value = false;
+};
+
 // Clear workspace
 const clearWorkspace = () => {
   if (foo.value && foo.value.workspace) {
@@ -1462,6 +1618,10 @@ onMounted(() => {
   connectToROS();
   document.addEventListener('mousemove', onDrag);
   document.addEventListener('mouseup', stopDragging);
+
+  // Camera drag listeners
+  document.addEventListener('mousemove', onCameraDrag);
+  document.addEventListener('mouseup', stopCameraDrag);
 
   // Load saved mission after a short delay to ensure workspace is ready
   setTimeout(() => {
@@ -1620,7 +1780,20 @@ onUnmounted(() => {
           ></blockly-component>
 
           <!-- Camera Feed Overlay in Drone Mode -->
-          <div v-if="viewMode === 'drone'" class="camera-overlay">
+          <div
+            v-if="viewMode === 'drone'"
+            class="camera-overlay"
+            :class="{ enlarged: cameraEnlarged, dragging: isDraggingCamera }"
+            :style="{
+              transform: `translate(${cameraPosition.x}px, ${cameraPosition.y}px)`
+            }"
+          >
+            <div class="camera-header" @mousedown="startCameraDrag">
+              <span class="camera-title">DEXI Camera</span>
+              <button @click="toggleCameraSize" class="camera-toggle-btn" :title="cameraEnlarged ? 'Minimize' : 'Maximize'">
+                {{ cameraEnlarged ? '⤓' : '⤢' }}
+              </button>
+            </div>
             <CameraFeed :should-invert="false" />
           </div>
         </div>
@@ -2016,8 +2189,8 @@ button:disabled {
 
 /* Camera Overlay */
 .camera-overlay {
-  position: absolute;
-  top: 1rem;
+  position: fixed;
+  top: 5rem;
   right: 1rem;
   width: 400px;
   height: 300px;
@@ -2025,12 +2198,66 @@ button:disabled {
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
   z-index: 1000;
-  background: black;
+  background: #1a1a1a;
+  transition: width 0.3s ease, height 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.camera-overlay.enlarged {
+  width: 800px;
+  height: 600px;
+}
+
+.camera-overlay.dragging {
+  cursor: grabbing;
+  transition: none;
+}
+
+.camera-header {
+  background: #2a2a2a;
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: grab;
+  user-select: none;
+  border-bottom: 1px solid #3a3a3a;
+}
+
+.camera-header:active {
+  cursor: grabbing;
+}
+
+.camera-title {
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.camera-toggle-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: white;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.camera-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .camera-overlay :deep(.camera-container) {
   width: 100%;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
 .camera-overlay :deep(.camera-feed) {
@@ -2038,7 +2265,6 @@ button:disabled {
   height: 100%;
   object-fit: cover;
 }
-
 
 .divider {
   width: 8px;
