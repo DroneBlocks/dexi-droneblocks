@@ -67,42 +67,31 @@ export class LED {
         "message0": "led pixel %1 red %2 green %3 blue %4",
         "args0": [
           {
-            "type": "field_number",
+            "type": "input_value",
             "name": "index",
-            "value": 0,
-            "min": 0,
-            "max": 43,
-            "precision": 1
+            "check": "Number"
           },
           {
-            "type": "field_number",
+            "type": "input_value",
             "name": "red",
-            "value": 255,
-            "min": 0,
-            "max": 255,
-            "precision": 1
+            "check": "Number"
           },
           {
-            "type": "field_number",
+            "type": "input_value",
             "name": "green",
-            "value": 255,
-            "min": 0,
-            "max": 255,
-            "precision": 1
+            "check": "Number"
           },
           {
-            "type": "field_number",
+            "type": "input_value",
             "name": "blue",
-            "value": 255,
-            "min": 0,
-            "max": 255,
-            "precision": 1
+            "check": "Number"
           }
         ],
+        "inputsInline": true,
         "colour": "#9C27B0",
         "previousStatement": null,
         "nextStatement": null,
-        "tooltip": "Set individual LED pixel color (index: 0-43, RGB: 0-255)",
+        "tooltip": "Set individual LED pixel color (index: 0-44, RGB: 0-255)",
         "helpUrl": ""
       }
     ]);
@@ -131,12 +120,12 @@ await new Promise(resolve => setTimeout(resolve, 100)); // Brief delay
     }
 
     javascriptGenerator.forBlock['led_pixel'] = function(block: Blockly.Block, generator: JavascriptGenerator) {
-      const index = block.getFieldValue('index');
-      const red = block.getFieldValue('red');
-      const green = block.getFieldValue('green');
-      const blue = block.getFieldValue('blue');
+      const index = generator.valueToCode(block, 'index', 0) || '0';
+      const red = generator.valueToCode(block, 'red', 0) || '255';
+      const green = generator.valueToCode(block, 'green', 0) || '255';
+      const blue = generator.valueToCode(block, 'blue', 0) || '255';
       return `
-// Set LED pixel ${index} to RGB(${red}, ${green}, ${blue})
+// Set LED pixel to RGB color
 ledPixelColorService.callService({
   index: ${index},
   r: ${red},

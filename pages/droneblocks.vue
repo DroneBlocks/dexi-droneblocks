@@ -281,10 +281,26 @@ const options = {
         <field name="color">white</field>
       </block>
       <block type="led_pixel">
-        <field name="index">0</field>
-        <field name="red">255</field>
-        <field name="green">255</field>
-        <field name="blue">255</field>
+        <value name="index">
+          <shadow type="math_number">
+            <field name="NUM">0</field>
+          </shadow>
+        </value>
+        <value name="red">
+          <shadow type="math_number">
+            <field name="NUM">255</field>
+          </shadow>
+        </value>
+        <value name="green">
+          <shadow type="math_number">
+            <field name="NUM">255</field>
+          </shadow>
+        </value>
+        <value name="blue">
+          <shadow type="math_number">
+            <field name="NUM">255</field>
+          </shadow>
+        </value>
       </block>
     </category>
     <category name="April Tags" colour="#FF9800">
@@ -771,6 +787,9 @@ const executeGotoNEDWithService = (north: number, east: number, down: number, ya
   });
 };
 
+// Variable context for loop variables
+const variableContext = new Map<string, number>();
+
 // Helper function to get value from input_value blocks
 const getInputValue = (block: any, inputName: string, defaultValue: number): number => {
   const input = block.getInput(inputName);
@@ -779,7 +798,11 @@ const getInputValue = (block: any, inputName: string, defaultValue: number): num
     if (targetBlock.type === 'math_number') {
       return parseFloat(targetBlock.getFieldValue('NUM'));
     } else if (targetBlock.type === 'variables_get') {
-      // Handle variables - would need variable context
+      // Handle variables from loop context
+      const varName = targetBlock.getFieldValue('VAR');
+      if (variableContext.has(varName)) {
+        return variableContext.get(varName)!;
+      }
       return defaultValue;
     }
   }
@@ -970,16 +993,17 @@ const runMission = async () => {
             });
           }
         } else if (blockType === 'led_pixel') {
-          const index = block.getFieldValue('index');
-          const red = block.getFieldValue('red');
-          const green = block.getFieldValue('green');
-          const blue = block.getFieldValue('blue');
+          // Get values from connected blocks (shadow or regular)
+          const index = getInputValue(block, 'index', 0);
+          const red = getInputValue(block, 'red', 255);
+          const green = getInputValue(block, 'green', 255);
+          const blue = getInputValue(block, 'blue', 255);
           if (ledPixelColorService.value) {
             const request = new ROSLIB.ServiceRequest({
-              index: parseInt(index),
-              r: parseInt(red),
-              g: parseInt(green),
-              b: parseInt(blue)
+              index: index,
+              r: red,
+              g: green,
+              b: blue
             });
             await new Promise((resolve, reject) => {
               ledPixelColorService.value!.callService(request, (response: any) => {
@@ -1076,6 +1100,28 @@ const runMission = async () => {
                         resolve(response);
                       }, (error: any) => {
                         console.error(`❌ LED ring color failed:`, error);
+                        reject(error);
+                      });
+                    });
+                  }
+                } else if (innerBlockType === 'led_pixel') {
+                  const pixelIndex = getInputValue(currentBlock, 'index', 0);
+                  const pixelRed = getInputValue(currentBlock, 'red', 255);
+                  const pixelGreen = getInputValue(currentBlock, 'green', 255);
+                  const pixelBlue = getInputValue(currentBlock, 'blue', 255);
+                  if (ledPixelColorService.value) {
+                    const request = new ROSLIB.ServiceRequest({
+                      index: pixelIndex,
+                      r: pixelRed,
+                      g: pixelGreen,
+                      b: pixelBlue
+                    });
+                    await new Promise((resolve, reject) => {
+                      ledPixelColorService.value!.callService(request, (response: any) => {
+                        console.log(`✅ LED pixel ${pixelIndex} set to RGB(${pixelRed}, ${pixelGreen}, ${pixelBlue})`);
+                        resolve(response);
+                      }, (error: any) => {
+                        console.error(`❌ LED pixel failed:`, error);
                         reject(error);
                       });
                     });
@@ -1251,6 +1297,96 @@ const runMission = async () => {
                 currentBlock = currentBlock.getNextBlock();
               }
             }
+          }
+        } else if (blockType === 'controls_for') {
+          // Handle for loop with variable (count with i from X to Y by Z)
+          const varName = block.getFieldValue('VAR');
+          const fromValue = getInputValue(block, 'FROM', 0);
+          const toValue = getInputValue(block, 'TO', 10);
+          const byValue = getInputValue(block, 'BY', 1);
+
+          console.log(`🔁 Starting for loop: ${varName} from ${fromValue} to ${toValue} by ${byValue}`);
+
+          const doBlock = block.getInputTargetBlock('DO');
+          if (doBlock) {
+            for (let loopVar = fromValue; loopVar <= toValue; loopVar += byValue) {
+              // Set the variable in context
+              variableContext.set(varName, loopVar);
+              console.log(`🔁 Loop ${varName} = ${loopVar}`);
+
+              let currentBlock = doBlock;
+              while (currentBlock) {
+                const innerBlockType = currentBlock.type;
+
+                // Execute blocks inside the for loop
+                if (innerBlockType === 'led_pixel') {
+                  const pixelIndex = getInputValue(currentBlock, 'index', 0);
+                  const pixelRed = getInputValue(currentBlock, 'red', 255);
+                  const pixelGreen = getInputValue(currentBlock, 'green', 255);
+                  const pixelBlue = getInputValue(currentBlock, 'blue', 255);
+                  if (ledPixelColorService.value) {
+                    const request = new ROSLIB.ServiceRequest({
+                      index: pixelIndex,
+                      r: pixelRed,
+                      g: pixelGreen,
+                      b: pixelBlue
+                    });
+                    await new Promise((resolve, reject) => {
+                      ledPixelColorService.value!.callService(request, (response: any) => {
+                        console.log(`✅ LED pixel ${pixelIndex} set to RGB(${pixelRed}, ${pixelGreen}, ${pixelBlue})`);
+                        resolve(response);
+                      }, (error: any) => {
+                        console.error(`❌ LED pixel failed:`, error);
+                        reject(error);
+                      });
+                    });
+                  }
+                } else if (innerBlockType === 'led_effect') {
+                  const effect = currentBlock.getFieldValue('effect');
+                  if (ledEffectService.value) {
+                    const request = new ROSLIB.ServiceRequest({ effect_name: effect });
+                    await new Promise((resolve, reject) => {
+                      ledEffectService.value!.callService(request, (response: any) => {
+                        console.log(`✅ LED effect set to ${effect}`);
+                        resolve(response);
+                      }, (error: any) => {
+                        console.error(`❌ LED effect failed:`, error);
+                        reject(error);
+                      });
+                    });
+                  }
+                } else if (innerBlockType === 'led_ring') {
+                  const color = currentBlock.getFieldValue('color');
+                  if (ledRingColorService.value) {
+                    const request = new ROSLIB.ServiceRequest({ color: color });
+                    await new Promise((resolve, reject) => {
+                      ledRingColorService.value!.callService(request, (response: any) => {
+                        console.log(`✅ LED ring set to ${color}`);
+                        resolve(response);
+                      }, (error: any) => {
+                        console.error(`❌ LED ring color failed:`, error);
+                        reject(error);
+                      });
+                    });
+                  }
+                } else if (innerBlockType === 'nav_wait') {
+                  const durationInput = currentBlock.getInput('DURATION');
+                  let duration = 1;
+                  if (durationInput && durationInput.connection && durationInput.connection.targetBlock()) {
+                    const durationBlock = durationInput.connection.targetBlock();
+                    if (durationBlock.type === 'math_number') {
+                      duration = parseFloat(durationBlock.getFieldValue('NUM'));
+                    }
+                  }
+                  console.log(`⏱️ Waiting ${duration} seconds...`);
+                  await new Promise(resolve => setTimeout(resolve, duration * 1000));
+                }
+
+                currentBlock = currentBlock.getNextBlock();
+              }
+            }
+            // Clean up variable after loop
+            variableContext.delete(varName);
           }
         } else if (blockType === 'controls_if') {
           // Handle if/else conditional blocks
