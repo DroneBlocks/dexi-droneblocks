@@ -1,9 +1,18 @@
 <template>
   <Transition name="fade">
-    <div v-if="isActive && currentLesson && currentStep" class="tutorial-overlay">
+    <div
+      v-if="isActive && currentLesson && currentStep"
+      class="tutorial-overlay"
+      :style="positionStyle"
+    >
       <div class="tutorial-container">
-        <!-- Progress Header -->
-        <div class="tutorial-header">
+        <!-- Progress Header (Drag Handle) -->
+        <div
+          class="tutorial-header"
+          @mousedown="startDrag"
+          @touchstart="startDrag"
+        >
+          <div class="drag-indicator" title="Drag to move">⋮⋮</div>
           <div class="lesson-info">
             <span class="lesson-icon">{{ currentLesson.icon }}</span>
             <div class="lesson-title-section">
@@ -67,7 +76,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useTutorial } from '../composables/useTutorial';
 
 const tutorial = useTutorial();
@@ -87,6 +96,92 @@ const {
 } = tutorial;
 
 const showHints = ref(false);
+
+// Drag functionality
+const position = ref<{ x: number | null; y: number | null }>({ x: null, y: null });
+const isDragging = ref(false);
+const dragOffset = ref({ x: 0, y: 0 });
+
+const positionStyle = computed(() => {
+  if (position.value.x === null || position.value.y === null) {
+    // Default position (bottom-right)
+    return {};
+  }
+  return {
+    bottom: 'auto',
+    right: 'auto',
+    top: `${position.value.y}px`,
+    left: `${position.value.x}px`,
+  };
+});
+
+function startDrag(e: MouseEvent | TouchEvent) {
+  // Don't start drag if clicking the close button
+  if ((e.target as HTMLElement).closest('.close-btn')) return;
+
+  isDragging.value = true;
+
+  const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+  const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+
+  // Get current position of the modal
+  const overlay = (e.currentTarget as HTMLElement).closest('.tutorial-overlay') as HTMLElement;
+  if (overlay) {
+    const rect = overlay.getBoundingClientRect();
+    dragOffset.value = {
+      x: clientX - rect.left,
+      y: clientY - rect.top,
+    };
+    // Initialize position if not already set
+    if (position.value.x === null) {
+      position.value = { x: rect.left, y: rect.top };
+    }
+  }
+
+  e.preventDefault();
+}
+
+function onDrag(e: MouseEvent | TouchEvent) {
+  if (!isDragging.value) return;
+
+  const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+  const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+
+  let newX = clientX - dragOffset.value.x;
+  let newY = clientY - dragOffset.value.y;
+
+  // Constrain to viewport
+  const maxX = window.innerWidth - 320; // Approximate modal width
+  const maxY = window.innerHeight - 100; // Leave some room at bottom
+
+  newX = Math.max(0, Math.min(newX, maxX));
+  newY = Math.max(0, Math.min(newY, maxY));
+
+  position.value = { x: newX, y: newY };
+}
+
+function stopDrag() {
+  isDragging.value = false;
+}
+
+onMounted(() => {
+  window.addEventListener('mousemove', onDrag);
+  window.addEventListener('mouseup', stopDrag);
+  window.addEventListener('touchmove', onDrag);
+  window.addEventListener('touchend', stopDrag);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('mousemove', onDrag);
+  window.removeEventListener('mouseup', stopDrag);
+  window.removeEventListener('touchmove', onDrag);
+  window.removeEventListener('touchend', stopDrag);
+});
+
+// Reset position when starting a new lesson
+watch(currentLesson, () => {
+  position.value = { x: null, y: null };
+});
 
 // Debug logging
 watch([isActive, currentLesson, currentStep], ([active, lesson, step]) => {
@@ -158,6 +253,24 @@ function handleExit() {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  cursor: grab;
+  user-select: none;
+}
+
+.tutorial-header:active {
+  cursor: grabbing;
+}
+
+.drag-indicator {
+  opacity: 0.5;
+  font-size: 1rem;
+  letter-spacing: -2px;
+  margin-right: 0.5rem;
+  transition: opacity 0.2s;
+}
+
+.tutorial-header:hover .drag-indicator {
+  opacity: 0.8;
 }
 
 .lesson-info {

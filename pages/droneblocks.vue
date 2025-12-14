@@ -14,6 +14,7 @@ import TutorialHighlight from '~/tutorial/components/TutorialHighlight.vue';
 import TutorialLessonPicker from '~/tutorial/components/TutorialLessonPicker.vue';
 import KeyboardControl from '~/components/KeyboardControl.vue';
 import CameraFeed from '~/components/CameraFeed.vue';
+import CTFResultPopup from '~/components/CTFResultPopup.vue';
 
 const navigation = new Navigation();
 const led = new LED();
@@ -1826,6 +1827,9 @@ onUnmounted(() => {
       :isOpen="showKeyboardControl"
       @close="showKeyboardControl = false"
     />
+
+    <!-- CTF Result Popup -->
+    <CTFResultPopup v-if="ros && connected" :ros="ros" />
   </div>
 </template>
 
