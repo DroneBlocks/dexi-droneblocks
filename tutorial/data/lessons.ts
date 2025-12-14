@@ -14,7 +14,7 @@ export const lessons: TutorialLesson[] = [
         id: 'welcome',
         title: 'Welcome to DroneBlocks!',
         description: 'DroneBlocks is a visual programming environment where you drag and drop blocks to create drone missions.',
-        instruction: 'Let\'s get you flying in under 2 minutes! First, let\'s understand what you\'re looking at.',
+        instruction: 'Let\'s get started in under 2 minutes! First, let\'s understand what you\'re looking at.',
         autoAdvance: false,
       },
       {
