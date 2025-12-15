@@ -3,9 +3,10 @@
   <div
     v-if="isOpen"
     ref="widgetRef"
-    class="fixed z-50 bg-gray-800 text-white rounded-lg shadow-lg border border-gray-600 select-none"
+    class="fixed z-[2000] bg-gray-800 text-white rounded-lg shadow-lg border border-gray-600 select-none"
     :style="{ left: position.x + 'px', top: position.y + 'px', width: widgetWidth + 'px' }"
     @mousedown="startDrag"
+    @touchstart="startDrag"
   >
     <!-- Header with drag handle -->
     <div class="flex justify-between items-center p-3 bg-gray-700 rounded-t-lg cursor-move">
@@ -259,27 +260,38 @@ const toggleControl = () => {
 }
 
 
-// Drag functionality
+// Drag functionality - supports both mouse and touch
+const getEventCoords = (event) => {
+  if (event.touches && event.touches.length > 0) {
+    return { x: event.touches[0].clientX, y: event.touches[0].clientY }
+  }
+  return { x: event.clientX, y: event.clientY }
+}
+
 const startDrag = (event) => {
   if (event.target.closest('button')) return // Don't drag when clicking buttons
 
   isDragging.value = true
   const rect = widgetRef.value.getBoundingClientRect()
+  const coords = getEventCoords(event)
   dragOffset.value = {
-    x: event.clientX - rect.left,
-    y: event.clientY - rect.top
+    x: coords.x - rect.left,
+    y: coords.y - rect.top
   }
 
   document.addEventListener('mousemove', onDrag)
   document.addEventListener('mouseup', stopDrag)
+  document.addEventListener('touchmove', onDrag, { passive: false })
+  document.addEventListener('touchend', stopDrag)
   event.preventDefault()
 }
 
 const onDrag = (event) => {
   if (!isDragging.value) return
 
-  const x = event.clientX - dragOffset.value.x
-  const y = event.clientY - dragOffset.value.y
+  const coords = getEventCoords(event)
+  const x = coords.x - dragOffset.value.x
+  const y = coords.y - dragOffset.value.y
 
   // Keep widget within viewport bounds
   const maxX = window.innerWidth - widgetWidth
@@ -289,12 +301,16 @@ const onDrag = (event) => {
     x: Math.max(0, Math.min(x, maxX)),
     y: Math.max(0, Math.min(y, maxY))
   }
+
+  event.preventDefault()
 }
 
 const stopDrag = () => {
   isDragging.value = false
   document.removeEventListener('mousemove', onDrag)
   document.removeEventListener('mouseup', stopDrag)
+  document.removeEventListener('touchmove', onDrag)
+  document.removeEventListener('touchend', stopDrag)
 }
 
 const close = () => {
@@ -316,6 +332,8 @@ onUnmounted(() => {
   document.removeEventListener('keydown', handleKeyPress)
   document.removeEventListener('mousemove', onDrag)
   document.removeEventListener('mouseup', stopDrag)
+  document.removeEventListener('touchmove', onDrag)
+  document.removeEventListener('touchend', stopDrag)
   if (ros.value) {
     ros.value.close()
   }

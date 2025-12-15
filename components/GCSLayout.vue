@@ -2,17 +2,17 @@
   <div class="flex flex-col h-full">
     <MainMenu ref="mainMenuRef" @open-keyboard-control="showKeyboardControl = true" />
     <!-- Main Content -->
-    <div class="flex-1 flex">
+    <div class="flex-1 flex flex-col md:flex-row overflow-hidden">
       <!-- Main Content Area with Tabs -->
-      <div class="flex-1 bg-black relative flex flex-col">
+      <div class="flex-1 bg-black relative flex flex-col min-h-0">
         <!-- Tab Navigation -->
         <div class="bg-gray-800 border-b border-gray-700">
-          <nav class="flex space-x-8 px-4">
+          <nav class="flex space-x-4 sm:space-x-8 px-2 sm:px-4 overflow-x-auto">
             <button
               v-for="tab in tabs"
               :key="tab.id"
               @click="activeTab = tab.id"
-              class="py-3 px-1 text-sm font-medium border-b-2 transition-colors"
+              class="py-2 sm:py-3 px-1 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex-shrink-0"
               :class="[
                 activeTab === tab.id
                   ? 'text-blue-400 border-blue-400'
@@ -21,13 +21,25 @@
             >
               {{ tab.name }}
             </button>
+            <!-- LED Panel Toggle Button (mobile only) -->
+            <button
+              @click="showLEDPanel = !showLEDPanel"
+              class="md:hidden py-2 sm:py-3 px-1 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ml-auto"
+              :class="[
+                showLEDPanel
+                  ? 'text-purple-400 border-purple-400'
+                  : 'text-gray-400 hover:text-gray-300 border-transparent'
+              ]"
+            >
+              LED
+            </button>
           </nav>
         </div>
 
         <!-- Tab Content -->
-        <div class="flex-1 relative">
+        <div class="flex-1 relative min-h-0">
           <!-- Camera Tab -->
-          <div v-if="activeTab === 'camera'" class="p-4 h-full">
+          <div v-if="activeTab === 'camera'" class="p-2 sm:p-4 h-full">
             <CameraFeed :should-invert="mainMenuRef?.cameraInverted ?? false" />
           </div>
 
@@ -48,16 +60,23 @@
         </div>
       </div>
 
-      <!-- Right Column -->
-      <div class="w-[250px] bg-gray-700 text-white p-4">
-        <h3 class="text-lg font-bold mb-2">DEXI LED Ring</h3>
-        <div class="grid grid-cols-2 gap-1">
-          <div v-for="(color, name) in dexiLEDColors" :key="name" 
+      <!-- Right Column - Hidden on mobile, shown on md+ OR when toggled -->
+      <div
+        class="bg-gray-700 text-white p-3 sm:p-4 transition-all duration-300 overflow-y-auto"
+        :class="[
+          showLEDPanel ? 'block' : 'hidden md:block',
+          'w-full md:w-[200px] lg:w-[250px]',
+          'max-h-[40vh] md:max-h-none'
+        ]"
+      >
+        <h3 class="text-base sm:text-lg font-bold mb-2">DEXI LED Ring</h3>
+        <div class="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-2 gap-1">
+          <div v-for="(color, name) in dexiLEDColors" :key="name"
                class="flex flex-col items-center p-0.5 rounded cursor-pointer hover:bg-gray-600 relative group"
                @click="setLEDColor(name)"
                :title="name">
             <div class="w-full h-4 rounded" :style="{ backgroundColor: color }"></div>
-            <span class="text-[10px] mt-0.5">{{ name }}</span>
+            <span class="text-[10px] mt-0.5 truncate w-full text-center">{{ name }}</span>
           </div>
         </div>
 
@@ -97,6 +116,9 @@ const mainMenuRef = ref();
 
 // Keyboard control modal
 const showKeyboardControl = ref(false);
+
+// LED panel visibility (mobile toggle)
+const showLEDPanel = ref(false);
 
 // SITL URL - construct from current hostname with port 1337
 const sitlUrl = ref('');

@@ -1810,10 +1810,12 @@ onUnmounted(() => {
   <div class="droneblocks-container">
     <div class="header">
       <div class="header-left">
-        <h1>DroneBlocks</h1>
+        <a href="/" class="logo-link">
+          <img src="/droneblocks-icon.jpg" alt="DroneBlocks" class="logo-icon" />
+        </a>
         <div class="connection-indicator" :class="{ connected: connected, disconnected: !connected }">
           <span class="indicator-dot"></span>
-          <span class="indicator-text">{{ connected ? 'Connected' : 'Disconnected' }}</span>
+          <span class="indicator-text hidden sm:inline">{{ connected ? 'Connected' : 'Disconnected' }}</span>
         </div>
       </div>
 
@@ -1822,13 +1824,13 @@ onUnmounted(() => {
           <FlightModeDisplay v-if="ros" :ros="ros" />
           <span v-else class="telemetry-item">Mode: Unknown</span>
         </div>
-        <div v-if="connected" class="telemetry-item apriltag-indicator">
+        <div v-if="connected" class="telemetry-item apriltag-indicator hidden lg:flex">
           <span class="apriltag-label">🏷️ Tag:</span>
           <span class="apriltag-value" :class="{ 'tag-detected': currentAprilTagId >= 0 }">
             {{ currentAprilTagId >= 0 ? currentAprilTagId : 'None' }}
           </span>
         </div>
-        <div v-if="connected" class="telemetry-item ned-position">
+        <div v-if="connected" class="telemetry-item ned-position hidden xl:flex">
           <span>N: {{ nedNorth.toFixed(1) }}</span>
           <span>E: {{ nedEast.toFixed(1) }}</span>
           <span>D: {{ nedDown.toFixed(1) }}</span>
@@ -1836,22 +1838,17 @@ onUnmounted(() => {
       </div>
 
       <div class="header-right">
-        <button
-          @click="toggleViewMode"
-          class="secondary-btn view-mode-btn"
-          :title="viewMode === 'simulator' ? 'Switch to DEXI' : 'Switch to Simulator'"
-        >
-          {{ viewMode === 'simulator' ? 'Connect to DEXI' : 'Connect to Sim' }}
-        </button>
         <button @click="showLessonPicker = true" class="secondary-btn tutorial-btn" title="Tutorials">
-          📚 Tutorials
+          <span class="hidden sm:inline">📚 Tutorials</span>
+          <span class="sm:hidden">📚</span>
         </button>
         <button
           @click="isMissionRunning ? stopMission() : runMission()"
           :disabled="!connected"
           :class="isMissionRunning ? 'danger-btn' : 'primary-btn'"
         >
-          {{ isMissionRunning ? '⏹ Stop' : '🚀 Launch' }}
+          <span class="hidden sm:inline">{{ isMissionRunning ? '⏹ Stop' : '🚀 Launch' }}</span>
+          <span class="sm:hidden">{{ isMissionRunning ? '⏹' : '🚀' }}</span>
         </button>
         <div class="menu-container">
           <button @click="showMenu = !showMenu" class="icon-btn menu-btn" title="Menu">
@@ -1866,6 +1863,10 @@ onUnmounted(() => {
               <button @click="openKeyboardControl" class="menu-item">
                 <span>⌨️</span>
                 <span>Keyboard Control</span>
+              </button>
+              <button @click="toggleViewMode" class="menu-item">
+                <span>🔄</span>
+                <span>{{ viewMode === 'simulator' ? 'Connect to DEXI' : 'Connect to Sim' }}</span>
               </button>
             </div>
           </Transition>
@@ -2009,26 +2010,59 @@ onUnmounted(() => {
 .header {
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
   color: white;
-  padding: 0.75rem 1.5rem;
+  padding: 0.5rem 0.5rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
   box-shadow: 0 2px 8px rgba(0,0,0,0.3);
   border-bottom: 1px solid rgba(42, 157, 143, 0.2);
+  flex-wrap: nowrap;
+  gap: 0.5rem;
+  position: relative;
+  z-index: 1000;
+}
+
+@media (min-width: 640px) {
+  .header {
+    padding: 0.5rem 0.75rem;
+  }
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.5rem;
+  min-width: 0;
+  flex-shrink: 1;
 }
 
-.header h1 {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
-  letter-spacing: 0.5px;
+@media (min-width: 640px) {
+  .header-left {
+    gap: 1rem;
+  }
 }
+
+.logo-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+  color: white;
+}
+
+.logo-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+}
+
+@media (min-width: 640px) {
+  .logo-icon {
+    width: 36px;
+    height: 36px;
+  }
+}
+
 
 .connection-indicator {
   display: flex;
@@ -2064,25 +2098,39 @@ onUnmounted(() => {
 }
 
 .header-center {
-  display: flex;
+  display: none;
   align-items: center;
-  gap: 2rem;
+  gap: 0.5rem;
   flex: 1;
   justify-content: center;
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .header-center {
+    display: flex;
+    gap: 0.75rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .header-center {
+    gap: 1rem;
+  }
 }
 
 .telemetry-group {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.5rem;
 }
 
 .telemetry-item {
   font-family: 'Courier New', monospace;
-  font-size: 0.875rem;
-  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
   background: rgba(42, 157, 143, 0.15);
-  border-radius: 6px;
+  border-radius: 4px;
   border: 1px solid rgba(42, 157, 143, 0.3);
 }
 
@@ -2109,8 +2157,8 @@ onUnmounted(() => {
 
 .ned-position {
   display: flex;
-  gap: 0.75rem;
-  font-size: 0.9rem;
+  gap: 0.375rem;
+  font-size: 0.7rem;
   font-family: 'Courier New', monospace;
 }
 
@@ -2120,8 +2168,15 @@ onUnmounted(() => {
 
 .header-right {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.25rem;
   align-items: center;
+  flex-shrink: 0;
+}
+
+@media (min-width: 640px) {
+  .header-right {
+    gap: 0.5rem;
+  }
 }
 
 button {
@@ -2157,11 +2212,17 @@ button:disabled {
 }
 
 .primary-btn {
-  padding: 0.5rem 1.25rem;
+  padding: 0.375rem 0.75rem;
   border-radius: 8px;
   background: #2a9d8f;
   color: white;
   box-shadow: 0 2px 4px rgba(42, 157, 143, 0.3);
+}
+
+@media (min-width: 640px) {
+  .primary-btn {
+    padding: 0.5rem 1.25rem;
+  }
 }
 
 .primary-btn:hover:not(:disabled) {
@@ -2171,12 +2232,18 @@ button:disabled {
 }
 
 .secondary-btn {
-  padding: 0.5rem 1rem;
+  padding: 0.375rem 0.5rem;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.1);
   color: white;
   border: 1px solid rgba(255, 255, 255, 0.2);
   transition: all 0.2s ease;
+}
+
+@media (min-width: 640px) {
+  .secondary-btn {
+    padding: 0.5rem 1rem;
+  }
 }
 
 .secondary-btn:hover:not(:disabled) {
@@ -2219,7 +2286,7 @@ button:disabled {
   border-bottom: 1px solid #ddd;
   padding: 0;
   flex-shrink: 0;
-  z-index: 100;
+  z-index: 10;
   position: relative;
   width: 100%;
 }
@@ -2235,15 +2302,23 @@ button:disabled {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
+  gap: 0.25rem;
+  padding: 0.375rem 0.5rem;
   background: #e0e0e0;
   border-right: 1px solid #ccc;
   cursor: pointer;
   transition: background 0.2s;
   white-space: nowrap;
   user-select: none;
-  min-height: 40px;
+  min-height: 36px;
+}
+
+@media (min-width: 640px) {
+  .tab {
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    min-height: 40px;
+  }
 }
 
 .tab:hover {
@@ -2256,9 +2331,15 @@ button:disabled {
 }
 
 .tab-name {
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   font-weight: 500;
   color: #333;
+}
+
+@media (min-width: 640px) {
+  .tab-name {
+    font-size: 0.875rem;
+  }
 }
 
 .tab-close {
@@ -2330,23 +2411,41 @@ button:disabled {
 /* Camera Overlay */
 .camera-overlay {
   position: fixed;
-  top: 5rem;
-  right: 1rem;
-  width: 400px;
-  height: 300px;
+  top: 4rem;
+  right: 0.5rem;
+  width: 200px;
+  height: 150px;
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-  z-index: 1000;
+  z-index: 500;
   background: #1a1a1a;
   transition: width 0.3s ease, height 0.3s ease;
   display: flex;
   flex-direction: column;
 }
 
+@media (min-width: 640px) {
+  .camera-overlay {
+    top: 5rem;
+    right: 1rem;
+    width: 300px;
+    height: 225px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .camera-overlay {
+    width: 400px;
+    height: 300px;
+  }
+}
+
 .camera-overlay.enlarged {
-  width: 800px;
-  height: 600px;
+  width: 90vw;
+  height: 70vh;
+  max-width: 800px;
+  max-height: 600px;
 }
 
 .camera-overlay.dragging {
@@ -2448,17 +2547,27 @@ button:disabled {
 
 .notification-modal {
   position: fixed;
-  top: 80px;
+  top: 60px;
   left: 50%;
   transform: translateX(-50%);
-  padding: 1rem 2rem;
+  padding: 0.75rem 1rem;
   border-radius: 8px;
   font-weight: bold;
-  font-size: 1.1rem;
+  font-size: 0.875rem;
   z-index: 10000;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  min-width: 300px;
+  min-width: 200px;
+  max-width: 90vw;
   text-align: center;
+}
+
+@media (min-width: 640px) {
+  .notification-modal {
+    top: 80px;
+    padding: 1rem 2rem;
+    font-size: 1.1rem;
+    min-width: 300px;
+  }
 }
 
 .notification-modal.success {

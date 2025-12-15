@@ -1,56 +1,58 @@
 <template>
-  <div class="w-full bg-gray-900 text-white p-4">
+  <div class="w-full bg-gray-900 text-white p-2 sm:p-4">
     <!-- Telemetry Display -->
-    <div class="flex items-center space-x-6 mb-4 text-sm">
+    <div class="flex flex-wrap items-center gap-2 sm:gap-4 md:gap-6 mb-2 sm:mb-4 text-xs sm:text-sm">
       <!-- Flight Mode -->
-      <div class="flex items-center space-x-2">
+      <div class="flex items-center space-x-1 sm:space-x-2">
         <FlightModeDisplay :ros="ros" class="font-mono" />
       </div>
 
       <!-- Battery -->
-      <div class="flex items-center space-x-2">
-        <span class="text-gray-400">Battery:</span>
+      <div class="flex items-center space-x-1 sm:space-x-2">
+        <span class="text-gray-400 hidden sm:inline">Battery:</span>
+        <span class="text-gray-400 sm:hidden">Bat:</span>
         <span class="font-mono" :class="batteryColorClass">{{ batteryDisplay }}</span>
       </div>
 
       <!-- Altitude -->
-      <div class="flex items-center space-x-2">
+      <div class="flex items-center space-x-1 sm:space-x-2">
         <span class="text-gray-400">Alt:</span>
         <span class="font-mono text-green-400">{{ altitudeDisplay }}</span>
       </div>
 
-      <!-- Ground Speed -->
-      <div class="flex items-center space-x-2">
+      <!-- Ground Speed - hidden on very small screens -->
+      <div class="hidden sm:flex items-center space-x-1 sm:space-x-2">
         <span class="text-gray-400">Speed:</span>
         <span class="font-mono text-yellow-400">{{ speedDisplay }}</span>
       </div>
 
-      <!-- Heading -->
-      <div class="flex items-center space-x-2">
+      <!-- Heading - hidden on small screens -->
+      <div class="hidden md:flex items-center space-x-1 sm:space-x-2">
         <span class="text-gray-400">Heading:</span>
         <span class="font-mono text-purple-400">{{ headingDisplay }}</span>
       </div>
     </div>
 
     <!-- Control Buttons -->
-    <div class="flex items-center space-x-4">
+    <div class="flex flex-wrap items-center gap-2 sm:gap-4">
       <!-- Mode Buttons -->
-      <button 
-        @click="setMode(2)" 
-        class="px-3 py-1.5 text-sm bg-blue-600 rounded-lg hover:bg-blue-700"
+      <button
+        @click="setMode(2)"
+        class="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm bg-blue-600 rounded-lg hover:bg-blue-700"
       >
-        Position Mode
+        <span class="hidden sm:inline">Position Mode</span>
+        <span class="sm:hidden">Pos</span>
       </button>
       <button
         @click="setMode(17)"
-        class="px-3 py-1.5 text-sm bg-blue-600 rounded-lg hover:bg-blue-700"
+        class="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm bg-blue-600 rounded-lg hover:bg-blue-700"
         style="display: none"
       >
         Takeoff Mode
       </button>
       <button
         @click="toggleOffboardMode"
-        class="px-3 py-1.5 text-sm rounded-lg"
+        class="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm rounded-lg"
         :class="isOffboardActive ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'"
         style="display: none"
       >
@@ -58,10 +60,10 @@
       </button>
 
       <!-- Arm Button -->
-      <button 
-        @click="armDrone" 
+      <button
+        @click="armDrone"
         :disabled="isArmed"
-        class="px-3 py-1.5 text-sm rounded-lg"
+        class="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm rounded-lg"
         :class="isArmed ? 'bg-green-600' : 'bg-red-600 hover:bg-red-700'"
       >
         {{ isArmed ? 'Armed' : 'Arm' }}
@@ -71,17 +73,17 @@
       <button
         @click="moveForward"
         :disabled="!isFlying"
-        class="px-3 py-1.5 text-sm bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50"
+        class="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50"
         style="display: none"
       >
         Move Forward 3m
       </button>
 
       <!-- Land Button -->
-      <button 
-        @click="land" 
+      <button
+        @click="land"
         :disabled="!isFlying"
-        class="px-3 py-1.5 text-sm bg-yellow-600 rounded-lg hover:bg-yellow-700 disabled:opacity-50"
+        class="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm bg-yellow-600 rounded-lg hover:bg-yellow-700 disabled:opacity-50"
       >
         Land
       </button>

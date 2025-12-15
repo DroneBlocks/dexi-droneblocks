@@ -2,14 +2,11 @@
   <Teleport to="body">
     <Transition name="highlight-fade">
       <div v-if="isActive && currentStep?.highlightElement" class="highlight-overlay">
-        <!-- Darkened overlay with cutout -->
-        <div class="highlight-backdrop" @click="handleBackdropClick"></div>
-
-        <!-- Spotlight effect -->
+        <!-- Darkened overlay with cutout - uses clip-path to allow clicks through spotlight -->
         <div
-          v-if="highlightRect"
-          class="highlight-spotlight"
-          :style="spotlightStyle"
+          class="highlight-backdrop"
+          :style="backdropClipStyle"
+          @click="handleBackdropClick"
         ></div>
 
         <!-- Pulsing border around highlighted element -->
@@ -41,15 +38,24 @@ const { isActive, currentStep } = useTutorial();
 const highlightRect = ref<DOMRect | null>(null);
 const resizeObserver = ref<ResizeObserver | null>(null);
 
-const spotlightStyle = computed(() => {
+// Create a clip-path that cuts out the spotlight area, allowing clicks through
+const backdropClipStyle = computed(() => {
   if (!highlightRect.value) return {};
 
   const padding = 8;
+  const left = highlightRect.value.left - padding;
+  const top = highlightRect.value.top - padding;
+  const right = highlightRect.value.right + padding;
+  const bottom = highlightRect.value.bottom + padding;
+
+  // Create a polygon that covers the whole screen except the spotlight area
+  // This uses the "frame" technique: outer rectangle, then inner cutout
   return {
-    left: `${highlightRect.value.left - padding}px`,
-    top: `${highlightRect.value.top - padding}px`,
-    width: `${highlightRect.value.width + padding * 2}px`,
-    height: `${highlightRect.value.height + padding * 2}px`,
+    clipPath: `polygon(
+      0% 0%, 0% 100%, ${left}px 100%, ${left}px ${top}px,
+      ${right}px ${top}px, ${right}px ${bottom}px,
+      ${left}px ${bottom}px, ${left}px 100%, 100% 100%, 100% 0%
+    )`,
   };
 });
 
@@ -148,16 +154,7 @@ onUnmounted(() => {
   bottom: 0;
   background: rgba(0, 0, 0, 0.5);
   pointer-events: auto;
-}
-
-.highlight-spotlight {
-  position: absolute;
-  background: transparent;
-  border-radius: 8px;
-  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
-  pointer-events: none;
-  transition: all 0.3s ease;
-  z-index: 1;
+  transition: clip-path 0.3s ease;
 }
 
 .highlight-border {
