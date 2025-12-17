@@ -15,6 +15,9 @@
             class="category-section"
           >
             <h3 class="category-title">{{ categoryTitle(category) }}</h3>
+            <p v-if="isLockedCategory(category)" class="category-locked-hint">
+              Click any lesson to explore more courses on DroneBlocks Learning
+            </p>
 
             <div class="lessons-grid">
               <div
@@ -22,15 +25,16 @@
                 :key="lesson.id"
                 class="lesson-card"
                 :class="{
-                  'completed': getLessonProgress(lesson.id).isCompleted,
-                  'locked': !getLessonProgress(lesson.id).canStart,
-                  'available': getLessonProgress(lesson.id).canStart && !getLessonProgress(lesson.id).isCompleted,
+                  'completed': getLessonProgress(lesson.id).isCompleted && !isLockedCategory(lesson.category),
+                  'locked': isLockedCategory(lesson.category) || !getLessonProgress(lesson.id).canStart,
+                  'available': !isLockedCategory(lesson.category) && getLessonProgress(lesson.id).canStart && !getLessonProgress(lesson.id).isCompleted,
                 }"
                 @click="handleLessonClick(lesson.id)"
               >
                 <div class="lesson-card-header">
                   <span class="lesson-icon">{{ lesson.icon }}</span>
-                  <span v-if="getLessonProgress(lesson.id).isCompleted" class="completion-badge">✓</span>
+                  <span v-if="getLessonProgress(lesson.id).isCompleted && !isLockedCategory(lesson.category)" class="completion-badge">✓</span>
+                  <span v-else-if="isLockedCategory(lesson.category)" class="lock-badge">🔒</span>
                   <span v-else-if="!getLessonProgress(lesson.id).canStart" class="lock-badge">🔒</span>
                 </div>
 
@@ -86,7 +90,19 @@ function getLessonsByCategory(category: string) {
   return allLessons.filter(lesson => lesson.category === category);
 }
 
+function isLockedCategory(category: string): boolean {
+  return category === 'intermediate' || category === 'advanced';
+}
+
 function handleLessonClick(lessonId: string) {
+  const lesson = allLessons.find(l => l.id === lessonId);
+
+  // If intermediate or advanced, open DroneBlocks learning platform
+  if (lesson && isLockedCategory(lesson.category)) {
+    window.open('https://learn.droneblocks.io/l/products?sortKey=name&sortDirection=asc&page=1', '_blank');
+    return;
+  }
+
   const lessonProgress = getLessonProgress(lessonId);
 
   if (!lessonProgress.canStart) {
@@ -206,10 +222,17 @@ function handleResetProgress() {
 }
 
 .category-title {
-  margin: 0 0 1rem 0;
+  margin: 0 0 0.5rem 0;
   font-size: 1.2rem;
   color: #264653;
   font-weight: 600;
+}
+
+.category-locked-hint {
+  margin: 0 0 1rem 0;
+  font-size: 0.85rem;
+  color: #666;
+  font-style: italic;
 }
 
 .lessons-grid {
@@ -243,8 +266,14 @@ function handleResetProgress() {
 }
 
 .lesson-card.locked {
-  opacity: 0.5;
-  cursor: not-allowed;
+  opacity: 0.6;
+  cursor: pointer;
+  background: #f5f5f5;
+}
+
+.lesson-card.locked:hover {
+  opacity: 0.8;
+  border-color: #999;
 }
 
 .lesson-card-header {
