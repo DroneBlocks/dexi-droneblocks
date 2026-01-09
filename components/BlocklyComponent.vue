@@ -10,31 +10,28 @@ const blocklyToolbox = ref();
 const blocklyDiv = ref();
 const workspace = shallowRef();
 
-defineExpose({workspace});
-
 onMounted(() => {
   const options = props.options || {};
   if (!options.toolbox) {
     options.toolbox = blocklyToolbox.value;
   }
   workspace.value = Blockly.inject(blocklyDiv.value, options);
+
+  // Force resize after injection
+  setTimeout(() => {
+    if (workspace.value) {
+      Blockly.svgResize(workspace.value);
+    }
+  }, 100);
 });
+
+defineExpose({workspace});
 </script>
 
 <template>
-  <div>
-    <div class="blocklyDiv" ref="blocklyDiv"></div>
+  <div ref="blocklyDiv" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
     <xml ref="blocklyToolbox" style="display: none">
       <slot></slot>
     </xml>
   </div>
 </template>
-
-<!-- Add "scoped" attribute to limit CSS to this component only -->
-<style scoped>
-.blocklyDiv {
-  height: 100%;
-  width: 100%;
-  text-align: left;
-}
-</style>

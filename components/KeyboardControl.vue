@@ -3,9 +3,14 @@
   <div
     v-if="isOpen"
     ref="widgetRef"
-    class="fixed z-50 bg-gray-800 text-white rounded-lg shadow-lg border border-gray-600 select-none"
+    class="fixed z-[2000] bg-gray-800 text-white rounded-lg shadow-lg select-none"
+    :class="[
+      isActive && !hasFocus ? 'border-2 border-yellow-500' : 'border border-gray-600'
+    ]"
     :style="{ left: position.x + 'px', top: position.y + 'px', width: widgetWidth + 'px' }"
     @mousedown="startDrag"
+    @touchstart="startDrag"
+    @click="recaptureFocus"
   >
     <!-- Header with drag handle -->
     <div class="flex justify-between items-center p-3 bg-gray-700 rounded-t-lg cursor-move">
@@ -26,6 +31,15 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
         </svg>
       </button>
+    </div>
+
+    <!-- Focus Lost Warning -->
+    <div
+      v-if="isActive && !hasFocus"
+      class="bg-yellow-500 text-black text-xs text-center py-2 px-3 cursor-pointer"
+      @click.stop="recaptureFocus"
+    >
+      Click here to regain keyboard control
     </div>
 
     <!-- Compact Controls -->
@@ -150,6 +164,7 @@ const widgetWidth = 240
 const position = ref({ x: 20, y: 80 })
 const isDragging = ref(false)
 const dragOffset = ref({ x: 0, y: 0 })
+const hasFocus = ref(true)
 
 // Key mapping based on dexi_offboard implementation
 const keyMappings = {
@@ -158,10 +173,10 @@ const keyMappings = {
   'W': { command: 'fly_up', distance_or_degrees: 1.0 },
   's': { command: 'fly_down', distance_or_degrees: 1.0 },
   'S': { command: 'fly_down', distance_or_degrees: 1.0 },
-  'a': { command: 'yaw_left', distance_or_degrees: 15.0 },
-  'A': { command: 'yaw_left', distance_or_degrees: 15.0 },
-  'd': { command: 'yaw_right', distance_or_degrees: 15.0 },
-  'D': { command: 'yaw_right', distance_or_degrees: 15.0 },
+  'a': { command: 'yaw_left', distance_or_degrees: 90.0 },
+  'A': { command: 'yaw_left', distance_or_degrees: 90.0 },
+  'd': { command: 'yaw_right', distance_or_degrees: 90.0 },
+  'D': { command: 'yaw_right', distance_or_degrees: 90.0 },
 
   // Right stick - Pitch/Roll (Arrow keys)
   'ArrowUp': { command: 'fly_forward', distance_or_degrees: 1.0 },
@@ -250,6 +265,7 @@ const toggleControl = () => {
     sendCommand('start_offboard_heartbeat')
     console.log('Starting offboard heartbeat for keyboard control')
     isActive.value = true
+    recaptureFocus()
   } else {
     // Stopping keyboard control - disable offboard mode
     sendCommand('stop_offboard_heartbeat')
@@ -258,28 +274,58 @@ const toggleControl = () => {
   }
 }
 
+// Focus management - detect when iframe captures focus
+const recaptureFocus = () => {
+  // Blur any iframe that might have focus
+  const iframes = document.querySelectorAll('iframe')
+  iframes.forEach(iframe => {
+    iframe.blur()
+  })
+  // Focus the main window
+  window.focus()
+  hasFocus.value = true
+}
 
-// Drag functionality
+const handleWindowFocus = () => {
+  hasFocus.value = true
+}
+
+const handleWindowBlur = () => {
+  hasFocus.value = false
+}
+
+// Drag functionality - supports both mouse and touch
+const getEventCoords = (event) => {
+  if (event.touches && event.touches.length > 0) {
+    return { x: event.touches[0].clientX, y: event.touches[0].clientY }
+  }
+  return { x: event.clientX, y: event.clientY }
+}
+
 const startDrag = (event) => {
   if (event.target.closest('button')) return // Don't drag when clicking buttons
 
   isDragging.value = true
   const rect = widgetRef.value.getBoundingClientRect()
+  const coords = getEventCoords(event)
   dragOffset.value = {
-    x: event.clientX - rect.left,
-    y: event.clientY - rect.top
+    x: coords.x - rect.left,
+    y: coords.y - rect.top
   }
 
   document.addEventListener('mousemove', onDrag)
   document.addEventListener('mouseup', stopDrag)
+  document.addEventListener('touchmove', onDrag, { passive: false })
+  document.addEventListener('touchend', stopDrag)
   event.preventDefault()
 }
 
 const onDrag = (event) => {
   if (!isDragging.value) return
 
-  const x = event.clientX - dragOffset.value.x
-  const y = event.clientY - dragOffset.value.y
+  const coords = getEventCoords(event)
+  const x = coords.x - dragOffset.value.x
+  const y = coords.y - dragOffset.value.y
 
   // Keep widget within viewport bounds
   const maxX = window.innerWidth - widgetWidth
@@ -289,12 +335,16 @@ const onDrag = (event) => {
     x: Math.max(0, Math.min(x, maxX)),
     y: Math.max(0, Math.min(y, maxY))
   }
+
+  event.preventDefault()
 }
 
 const stopDrag = () => {
   isDragging.value = false
   document.removeEventListener('mousemove', onDrag)
   document.removeEventListener('mouseup', stopDrag)
+  document.removeEventListener('touchmove', onDrag)
+  document.removeEventListener('touchend', stopDrag)
 }
 
 const close = () => {
@@ -310,12 +360,18 @@ const close = () => {
 onMounted(() => {
   initializeROS()
   document.addEventListener('keydown', handleKeyPress)
+  window.addEventListener('focus', handleWindowFocus)
+  window.addEventListener('blur', handleWindowBlur)
 })
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeyPress)
   document.removeEventListener('mousemove', onDrag)
   document.removeEventListener('mouseup', stopDrag)
+  document.removeEventListener('touchmove', onDrag)
+  document.removeEventListener('touchend', stopDrag)
+  window.removeEventListener('focus', handleWindowFocus)
+  window.removeEventListener('blur', handleWindowBlur)
   if (ros.value) {
     ros.value.close()
   }

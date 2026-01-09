@@ -87,7 +87,7 @@ import ROSLIB from 'roslib'
 import { useROS } from '~/composables/useROS'
 
 const isOpen = ref(false)
-const cameraInverted = ref(true) // Default matches current GCSLayout setting
+const cameraInverted = ref(false) // Camera displays right-side up by default
 const keyboardControlAvailable = ref(false)
 
 const { getROSURL, isDevMode } = useROS()
