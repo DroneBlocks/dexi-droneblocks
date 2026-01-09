@@ -16,6 +16,9 @@ import KeyboardControl from '~/components/KeyboardControl.vue';
 import CameraFeed from '~/components/CameraFeed.vue';
 import CTFResultPopup from '~/components/CTFResultPopup.vue';
 
+const route = useRoute();
+const router = useRouter();
+
 const navigation = new Navigation();
 const led = new LED();
 const apriltag = new AprilTag();
@@ -1748,6 +1751,72 @@ const clearWorkspace = () => {
   }
 };
 
+// Load demo mission from query param
+const loadDemoFromQuery = () => {
+  const demoId = route.query.demo as string;
+  if (!demoId) return false;
+
+  const demoData = localStorage.getItem('droneblocks_demo');
+  if (!demoData) return false;
+
+  try {
+    const demo = JSON.parse(demoData);
+    if (demo.id !== demoId) return false;
+
+    // Store the XML locally before clearing localStorage
+    const blocklyXml = demo.blocklyXml;
+    const demoName = demo.name;
+
+    // Clear the demo data and query param immediately
+    localStorage.removeItem('droneblocks_demo');
+    router.replace({ query: {} });
+
+    // Check if a tab with this demo name already exists
+    const existingTab = tabs.value.find(t => t.name === demoName);
+    let targetTabId: number;
+
+    if (existingTab) {
+      // Reuse existing tab
+      targetTabId = existingTab.id;
+      activeTabId.value = targetTabId;
+    } else {
+      // Create a new tab for this demo
+      const newTab = {
+        id: nextTabId.value,
+        name: demoName,
+        workspace: null
+      };
+      tabs.value.push(newTab);
+      targetTabId = newTab.id;
+      nextTabId.value++;
+      activeTabId.value = targetTabId;
+    }
+    saveTabs();
+
+    // Save the demo XML to localStorage for this tab so it persists
+    localStorage.setItem(`droneblocks_mission_${targetTabId}`, blocklyXml);
+
+    // Load the blocks after workspace is ready
+    setTimeout(() => {
+      if (foo.value && foo.value.workspace) {
+        foo.value.workspace.clear();
+        try {
+          const xml = Blockly.utils.xml.textToDom(blocklyXml);
+          Blockly.Xml.domToWorkspace(xml, foo.value.workspace);
+          console.log(`🎯 Demo loaded: ${demoName}`);
+        } catch (error) {
+          console.error('Failed to load demo blocks:', error);
+        }
+      }
+    }, 200);
+
+    return true;
+  } catch (error) {
+    console.error('Failed to parse demo data:', error);
+    return false;
+  }
+};
+
 onMounted(() => {
   // Load saved view mode
   const savedViewMode = localStorage.getItem('droneblocks_view_mode');
@@ -1765,7 +1834,11 @@ onMounted(() => {
 
   // Load saved mission after a short delay to ensure workspace is ready
   setTimeout(() => {
-    loadWorkspace();
+    // Check if we're loading a demo, otherwise load saved workspace
+    const loadedDemo = loadDemoFromQuery();
+    if (!loadedDemo) {
+      loadWorkspace();
+    }
 
     // Resize Blockly to account for tabs - do it multiple times to ensure it takes
     if (foo.value && foo.value.workspace) {
@@ -2304,6 +2377,7 @@ button:disabled {
 
 .tab {
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: center;
   gap: 0.25rem;
@@ -2313,6 +2387,7 @@ button:disabled {
   cursor: pointer;
   transition: background 0.2s;
   white-space: nowrap;
+  flex-shrink: 0;
   user-select: none;
   min-height: 36px;
 }
@@ -2356,6 +2431,8 @@ button:disabled {
   padding: 0;
   width: 20px;
   height: 20px;
+  min-width: 20px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
