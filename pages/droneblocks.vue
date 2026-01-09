@@ -95,6 +95,7 @@ const isMissionRunning = ref(false);
 const nedNorth = ref<number>(0);
 const nedEast = ref<number>(0);
 const nedDown = ref<number>(0);
+const nedHeading = ref<number>(0);
 
 // Unity simulator URL - use current hostname
 const unityUrl = ref('');
@@ -662,6 +663,8 @@ const connectToROS = () => {
         nedNorth.value = message.x;
         nedEast.value = message.y;
         nedDown.value = message.z;
+        // Convert heading from radians to degrees (0-360)
+        nedHeading.value = ((message.heading * 180 / Math.PI) + 360) % 360;
       });
 
       console.log('✅ Connected to ROS and services initialized');
@@ -1834,6 +1837,7 @@ onUnmounted(() => {
           <span>N: {{ nedNorth.toFixed(1) }}</span>
           <span>E: {{ nedEast.toFixed(1) }}</span>
           <span>D: {{ nedDown.toFixed(1) }}</span>
+          <span>H: {{ nedHeading.toFixed(0) }}°</span>
         </div>
       </div>
 
