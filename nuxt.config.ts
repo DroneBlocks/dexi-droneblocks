@@ -2,6 +2,10 @@
 export default defineNuxtConfig({
   devtools: { enabled: true },
   css: ['~/assets/css/main.css'],
+  runtimeConfig: {
+    // Server-side only (not exposed to client)
+    anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+  },
   postcss: {
     plugins: {
       tailwindcss: {},

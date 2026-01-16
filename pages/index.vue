@@ -107,6 +107,20 @@
           </div>
         </NuxtLink>
 
+        <!-- DEXI Chat -->
+        <NuxtLink to="/chat" class="group card">
+          <div class="card-content">
+            <div class="icon-wrapper bg-violet-50">
+              <span class="text-3xl">🤖</span>
+            </div>
+            <h3 class="card-title">DEXI Chat</h3>
+            <p class="card-description">
+              AI assistant for natural language drone control
+            </p>
+            <div class="card-arrow">→</div>
+          </div>
+        </NuxtLink>
+
       </div>
 
       <!-- Section Title -->
