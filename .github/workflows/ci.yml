@@ -5,6 +5,20 @@ on:
     branches: [main, feature/*]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      push_docker:
+        description: 'Push Docker image after build?'
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      docker_tag:
+        description: 'Docker image tag (if pushing)'
+        required: false
+        default: 'latest'
 
 jobs:
   build:
@@ -32,3 +46,31 @@ jobs:
           name: nuxt-build
           path: .output/
           retention-days: 7
+
+      # Docker steps - only run if manually triggered with push_docker=true
+      - name: Set up Docker Buildx
+        if: ${{ inputs.push_docker == 'true' }}
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        if: ${{ inputs.push_docker == 'true' }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        if: ${{ inputs.push_docker == 'true' }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: droneblocks/dexi-droneblocks:${{ inputs.docker_tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        if: ${{ inputs.push_docker == 'true' }}
+        run: |
+          echo "## Docker Image Published" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** droneblocks/dexi-droneblocks:${{ inputs.docker_tag }}" >> $GITHUB_STEP_SUMMARY
