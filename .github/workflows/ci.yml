@@ -32,6 +32,9 @@ on:
         required: false
         default: 'latest'
 
+env:
+  PREVIEW_MINUTES: 30
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -115,3 +118,97 @@ jobs:
         run: |
           echo "## Docker Image Published" >> $GITHUB_STEP_SUMMARY
           echo "**Image:** droneblocks/dexi-droneblocks:${{ inputs.docker_tag }}" >> $GITHUB_STEP_SUMMARY
+
+  # Automatic preview deployment for pull requests
+  preview:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Nuxt app
+        run: npm run build
+
+      - name: Install cloudflared
+        run: |
+          curl -sL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
+          chmod +x cloudflared
+
+      - name: Start server and create tunnel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Start Nuxt server in background
+          node .output/server/index.mjs &
+          SERVER_PID=$!
+          sleep 3
+
+          # Verify server is running
+          curl -sf http://localhost:3000 > /dev/null && echo "Server started successfully"
+
+          # Start cloudflared and capture the URL
+          ./cloudflared tunnel --url http://localhost:3000 2>&1 | tee tunnel.log &
+          TUNNEL_PID=$!
+
+          # Wait for tunnel URL to appear (with timeout)
+          echo "Waiting for tunnel URL..."
+          TUNNEL_URL=""
+          for i in {1..30}; do
+            TUNNEL_URL=$(grep -oP 'https://[a-z0-9-]+\.trycloudflare\.com' tunnel.log | head -1 || true)
+            if [ -n "$TUNNEL_URL" ]; then
+              echo "Found tunnel URL: $TUNNEL_URL"
+              break
+            fi
+            sleep 1
+          done
+
+          if [ -z "$TUNNEL_URL" ]; then
+            echo "Failed to get tunnel URL"
+            exit 1
+          fi
+
+          # Post comment to PR immediately
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          COMMENT_BODY="<!-- preview-deployment -->
+          ## 🚀 Preview Deployment Ready
+
+          **URL:** $TUNNEL_URL
+
+          This preview will be available for approximately **${{ env.PREVIEW_MINUTES }} minutes**.
+
+          > Note: The URL is temporary and will change on each push to this PR.
+
+          ---
+          <sub>Commit: ${{ github.sha }} | [View workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})</sub>"
+
+          # Delete any existing preview comments
+          gh api repos/${{ github.repository }}/issues/${PR_NUMBER}/comments --jq '.[] | select(.body | contains("<!-- preview-deployment -->")) | .id' | while read -r comment_id; do
+            gh api -X DELETE repos/${{ github.repository }}/issues/comments/${comment_id} || true
+          done
+
+          # Post new comment
+          gh pr comment ${PR_NUMBER} --body "$COMMENT_BODY"
+
+          echo ""
+          echo "=========================================="
+          echo "Preview URL posted to PR #${PR_NUMBER}"
+          echo "Preview will be available for ${{ env.PREVIEW_MINUTES }} minutes"
+          echo "=========================================="
+          echo ""
+
+          # Keep running for the preview duration
+          sleep $(( ${{ env.PREVIEW_MINUTES }} * 60 ))
