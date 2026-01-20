@@ -1,0 +1,213 @@
+name: CI
+
+on:
+  push:
+    branches: [main, feature/*]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      preview:
+        description: 'Start preview server with public URL?'
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      preview_minutes:
+        description: 'Preview timeout (minutes)'
+        required: false
+        default: '30'
+      push_docker:
+        description: 'Push Docker image after build?'
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      docker_tag:
+        description: 'Docker image tag (if pushing)'
+        required: false
+        default: 'latest'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Nuxt app
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuxt-build-${{ github.sha }}
+          path: .output/
+          retention-days: 7
+
+      # Preview server - only run if manually triggered with preview=true
+      - name: Start preview server with public URL
+        if: ${{ inputs.preview == 'true' }}
+        timeout-minutes: ${{ fromJSON(inputs.preview_minutes || '30') }}
+        run: |
+          echo "## 🚀 Starting Preview Server" >> $GITHUB_STEP_SUMMARY
+
+          # Install cloudflared
+          curl -sL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
+          chmod +x cloudflared
+
+          # Start Nuxt server in background
+          node .output/server/index.mjs &
+          sleep 3
+
+          # Verify server is running
+          curl -sf http://localhost:3000 > /dev/null && echo "✅ Server started successfully"
+
+          echo ""
+          echo "=========================================="
+          echo "🌐 Creating public tunnel..."
+          echo "   Look for the URL below (https://xxxx.trycloudflare.com)"
+          echo "   Server will run for ${{ inputs.preview_minutes || '30' }} minutes or until cancelled"
+          echo "=========================================="
+          echo ""
+
+          # Create tunnel - this will print the public URL and block
+          ./cloudflared tunnel --url http://localhost:3000
+
+      # Docker steps - only run if manually triggered with push_docker=true
+      - name: Set up Docker Buildx
+        if: ${{ inputs.push_docker == 'true' }}
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        if: ${{ inputs.push_docker == 'true' }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        if: ${{ inputs.push_docker == 'true' }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: droneblocks/dexi-droneblocks:${{ inputs.docker_tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        if: ${{ inputs.push_docker == 'true' }}
+        run: |
+          echo "## Docker Image Published" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** droneblocks/dexi-droneblocks:${{ inputs.docker_tag }}" >> $GITHUB_STEP_SUMMARY
+
+  # NEW: Automatic PR Preview Deployment
+  preview-deployment:
+    runs-on: ubuntu-latest
+    # Only run on pull requests
+    if: github.event_name == 'pull_request'
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: nuxt-build-${{ github.sha }}
+          path: .output/
+
+      - name: Deploy preview with Cloudflare Tunnel
+        timeout-minutes: 60
+        run: |
+          echo "## 🚀 Preview Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.head_ref }}" >> $GITHUB_STEP_SUMMARY
+          echo "**PR:** #${{ github.event.pull_request.number }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Install cloudflared
+          curl -sL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
+          chmod +x cloudflared
+
+          # Start Nuxt server in background
+          node .output/server/index.mjs &
+          SERVER_PID=$!
+          sleep 3
+
+          # Verify server is running
+          if curl -sf http://localhost:3000 > /dev/null; then
+            echo "✅ Server started successfully"
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "✅ Server started successfully" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Server failed to start"
+            exit 1
+          fi
+
+          # Start tunnel in background and capture output
+          ./cloudflared tunnel --url http://localhost:3000 2>&1 | tee tunnel.log &
+          TUNNEL_PID=$!
+
+          # Wait for tunnel URL to be generated (appears in logs)
+          echo "⏳ Waiting for tunnel URL..."
+          sleep 15
+
+          # Extract URL from logs (Cloudflare prints it to stderr)
+          PREVIEW_URL=$(grep -oP 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' tunnel.log | head -1)
+
+          if [ -n "$PREVIEW_URL" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 🌐 Preview URL" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**$PREVIEW_URL**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "---" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "⏰ This preview will remain active for **60 minutes**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "💡 You can test the application at the URL above" >> $GITHUB_STEP_SUMMARY
+
+            echo ""
+            echo "=========================================="
+            echo "🎉 Preview is live!"
+            echo "📍 URL: $PREVIEW_URL"
+            echo "⏰ Active for: 60 minutes"
+            echo "=========================================="
+            echo ""
+          else
+            echo "⚠️  Could not extract preview URL from tunnel logs" >> $GITHUB_STEP_SUMMARY
+            echo "Check the workflow logs for the Cloudflare tunnel URL" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Keep the tunnel alive for 60 minutes
+          # The timeout-minutes: 60 at the step level will handle termination
+          wait $TUNNEL_PID
+
+      - name: Cleanup
+        if: always()
+        run: |
+          # Kill any remaining node processes
+          pkill -f "node .output/server/index.mjs" || true
+          pkill -f "cloudflared" || true
