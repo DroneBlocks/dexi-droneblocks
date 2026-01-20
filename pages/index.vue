@@ -132,6 +132,20 @@
       <!-- Resources Grid -->
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
 
+        <!-- AprilTag Visualizer -->
+        <NuxtLink to="/apriltag" class="group card">
+          <div class="card-content">
+            <div class="icon-wrapper bg-teal-50">
+              <span class="text-3xl">📍</span>
+            </div>
+            <h3 class="card-title">AprilTag Visualizer</h3>
+            <p class="card-description">
+              Verify pose estimates before position hold
+            </p>
+            <div class="card-arrow">→</div>
+          </div>
+        </NuxtLink>
+
         <!-- ROS Debug -->
         <NuxtLink to="/ros" class="group card">
           <div class="card-content">
