@@ -4,6 +4,7 @@ import * as Blockly from 'blockly/core';
 import { Navigation } from '~/assets/ts/navigation';
 import { LED } from '~/assets/ts/led';
 import { AprilTag } from '~/assets/ts/apriltag';
+import { Flip } from '~/assets/ts/flip';
 import { javascriptGenerator } from 'blockly/javascript';
 import ROSLIB from 'roslib';
 import { useROS } from '~/composables/useROS';
@@ -22,6 +23,7 @@ const router = useRouter();
 const navigation = new Navigation();
 const led = new LED();
 const apriltag = new AprilTag();
+const flip = new Flip();
 
 // Tutorial system
 const tutorial = useTutorial();
@@ -277,6 +279,12 @@ const options = {
           </value>
         </block>
       </category>
+    <category name="Flip" colour="#FF6B6B">
+      <block type="flip_forward"></block>
+      <block type="flip_backward"></block>
+      <block type="flip_left"></block>
+      <block type="flip_right"></block>
+    </category>
     <category name="LED" colour="#9C27B0">
       <block type="led_effect">
         <field name="effect">rainbow</field>
