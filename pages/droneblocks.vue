@@ -15,6 +15,7 @@ import TutorialLessonPicker from '~/tutorial/components/TutorialLessonPicker.vue
 import KeyboardControl from '~/components/KeyboardControl.vue';
 import CameraFeed from '~/components/CameraFeed.vue';
 import CTFResultPopup from '~/components/CTFResultPopup.vue';
+import { generatePythonFromWorkspace } from '~/assets/ts/pythonGenerator';
 
 const route = useRoute();
 const router = useRouter();
@@ -30,6 +31,8 @@ const showLessonPicker = ref(false);
 // Menu and keyboard control
 const showMenu = ref(false);
 const showKeyboardControl = ref(false);
+const showQRCode = ref(false);
+const scanPageUrl = ref('');
 
 // View mode: 'simulator' or 'drone'
 const viewMode = ref<'simulator' | 'drone'>('simulator');
@@ -94,6 +97,22 @@ let apriltagTimeoutId: NodeJS.Timeout | null = null;
 // Mission state tracking
 const isMissionRunning = ref(false);
 
+// Python code view state
+const showPythonView = ref(false);
+const pythonCode = ref('');
+const pythonCopied = ref(false);
+
+// Copy Python code to clipboard
+const copyPythonCode = async () => {
+  try {
+    await navigator.clipboard.writeText(pythonCode.value);
+    pythonCopied.value = true;
+    setTimeout(() => pythonCopied.value = false, 2000);
+  } catch (err) {
+    console.error('Failed to copy:', err);
+  }
+};
+
 // NED position tracking
 const nedNorth = ref<number>(0);
 const nedEast = ref<number>(0);
@@ -104,7 +123,9 @@ const nedHeading = ref<number>(0);
 const unityUrl = ref('');
 if (process.client) {
   const hostname = window.location.hostname;
+  const port = window.location.port;
   unityUrl.value = `http://${hostname}:1337`;
+  scanPageUrl.value = `${window.location.protocol}//${hostname}${port ? ':' + port : ''}/scan`;
 }
 
 const options = {
@@ -1674,6 +1695,128 @@ const saveWorkspace = () => {
   }
 };
 
+// Update Python code from workspace
+const updatePythonCode = () => {
+  if (foo.value && foo.value.workspace) {
+    try {
+      pythonCode.value = generatePythonFromWorkspace(foo.value.workspace);
+    } catch (error) {
+      console.error('Failed to generate Python code:', error);
+      pythonCode.value = '# Error generating Python code';
+    }
+  }
+};
+
+
+// Load scanned blocks from localStorage
+const loadScannedBlocks = () => {
+  const scannedData = localStorage.getItem('scanned_blocks');
+  if (!scannedData) return;
+
+  try {
+    const blocks = JSON.parse(scannedData);
+    localStorage.removeItem('scanned_blocks'); // Clean up
+
+    if (!foo.value || !foo.value.workspace) return;
+
+    const workspace = foo.value.workspace;
+    workspace.clear(); // Clear existing blocks
+
+    let previousBlock: Blockly.Block | null = null;
+    let yPosition = 50;
+
+    for (const blockData of blocks) {
+      const blockType = mapScannedBlockType(blockData.type);
+      if (!blockType) continue;
+
+      const block = workspace.newBlock(blockType);
+      block.initSvg();
+      block.render();
+
+      // Set block position
+      if (previousBlock) {
+        // Connect to previous block
+        const previousConnection = previousBlock.nextConnection;
+        const currentConnection = block.previousConnection;
+        if (previousConnection && currentConnection) {
+          previousConnection.connect(currentConnection);
+        }
+      } else {
+        // First block - position it
+        block.moveBy(50, yPosition);
+      }
+
+      // Set values if present
+      setBlockValue(block, blockData);
+
+      previousBlock = block;
+    }
+
+    // Resize and update
+    Blockly.svgResize(workspace);
+    updatePythonCode();
+    saveWorkspace();
+
+    showNotificationMessage('Blocks loaded from scan!', 'success');
+  } catch (error) {
+    console.error('Failed to load scanned blocks:', error);
+  }
+};
+
+// Map scanned block types to Blockly block types
+const mapScannedBlockType = (type: string): string | null => {
+  const mapping: Record<string, string> = {
+    'takeoff': 'nav_takeoff',
+    'land': 'nav_land',
+    'fly_forward': 'nav_fly_forward',
+    'fly_backward': 'nav_fly_backward',
+    'fly_left': 'nav_fly_left',
+    'fly_right': 'nav_fly_right',
+    'fly_up': 'nav_fly_up',
+    'fly_down': 'nav_fly_down',
+    'yaw_left': 'nav_yaw_left',
+    'yaw_right': 'nav_yaw_right',
+    'wait': 'nav_wait',
+    'arm': 'nav_arm',
+    'disarm': 'nav_disarm',
+    'start_offboard_heartbeat': 'nav_start_offboard_heartbeat',
+    'switch_offboard_mode': 'nav_switch_offboard_mode',
+  };
+  return mapping[type.toLowerCase()] || null;
+};
+
+// Set value on a block's input
+const setBlockValue = (block: Blockly.Block, blockData: any) => {
+  if (blockData.value === undefined) return;
+
+  // Determine which input to set based on block type
+  let inputName: string | null = null;
+  const type = block.type;
+
+  if (type === 'nav_takeoff') inputName = 'ALTITUDE';
+  else if (type.includes('fly_')) inputName = 'DISTANCE';
+  else if (type.includes('yaw_')) inputName = 'DEGREES';
+  else if (type === 'nav_wait') inputName = 'DURATION';
+
+  if (!inputName) return;
+
+  const input = block.getInput(inputName);
+  if (!input || !input.connection) return;
+
+  // Create a number block for the value
+  const workspace = block.workspace;
+  const numberBlock = workspace.newBlock('math_number');
+  numberBlock.setFieldValue(String(blockData.value), 'NUM');
+  numberBlock.initSvg();
+  numberBlock.render();
+
+  // Connect the number block
+  const numberOutput = numberBlock.outputConnection;
+  if (numberOutput) {
+    input.connection.connect(numberOutput);
+  }
+};
+
 // Load workspace from localStorage
 const loadWorkspace = () => {
   loadWorkspaceForTab(activeTabId.value);
@@ -1696,10 +1839,11 @@ const loadWorkspaceForTab = (tabId: number) => {
       }
     }
 
-    // Force a resize after loading
+    // Force a resize after loading and update Python code
     setTimeout(() => {
       if (foo.value && foo.value.workspace) {
         Blockly.svgResize(foo.value.workspace);
+        updatePythonCode();
       }
     }, 50);
   }
@@ -1834,10 +1978,16 @@ onMounted(() => {
 
   // Load saved mission after a short delay to ensure workspace is ready
   setTimeout(() => {
+    // Check if we're loading scanned blocks
+    if (route.query.load === 'scanned') {
+      loadScannedBlocks();
+    }
     // Check if we're loading a demo, otherwise load saved workspace
-    const loadedDemo = loadDemoFromQuery();
-    if (!loadedDemo) {
-      loadWorkspace();
+    else {
+      const loadedDemo = loadDemoFromQuery();
+      if (!loadedDemo) {
+        loadWorkspace();
+      }
     }
 
     // Resize Blockly to account for tabs - do it multiple times to ensure it takes
@@ -1851,8 +2001,11 @@ onMounted(() => {
       }, 300);
     }
 
-    // Auto-save on workspace changes
+    // Auto-save on workspace changes and update Python code
     if (foo.value && foo.value.workspace) {
+      // Initial Python code generation
+      updatePythonCode();
+
       foo.value.workspace.addChangeListener((event: any) => {
         // Save on any block movement, creation, deletion, or modification
         if (event.type === Blockly.Events.BLOCK_MOVE ||
@@ -1860,6 +2013,7 @@ onMounted(() => {
             event.type === Blockly.Events.BLOCK_DELETE ||
             event.type === Blockly.Events.BLOCK_CHANGE) {
           saveWorkspace();
+          updatePythonCode();
         }
       });
     }
@@ -1940,6 +2094,14 @@ onUnmounted(() => {
               <button @click="openKeyboardControl" class="menu-item">
                 <span>⌨️</span>
                 <span>Keyboard Control</span>
+              </button>
+              <button @click="showPythonView = true; showMenu = false" class="menu-item">
+                <span>🐍</span>
+                <span>Python Code</span>
+              </button>
+              <button @click="showQRCode = true; showMenu = false" class="menu-item">
+                <span>📷</span>
+                <span>Scan Blocks</span>
               </button>
               <button @click="toggleViewMode" class="menu-item">
                 <span>🔄</span>
@@ -2028,6 +2190,26 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <!-- Python Code Overlay -->
+    <Transition name="fade">
+      <div v-if="showPythonView" class="python-overlay" @click.self="showPythonView = false">
+        <div class="python-modal">
+          <div class="python-modal-header">
+            <h3>Python Code</h3>
+            <div class="python-modal-actions">
+              <button @click="copyPythonCode" class="python-copy-btn" :class="{ success: pythonCopied }">
+                {{ pythonCopied ? 'Copied!' : 'Copy' }}
+              </button>
+              <button @click="showPythonView = false" class="python-close-btn">&times;</button>
+            </div>
+          </div>
+          <div class="python-modal-content">
+            <pre class="python-code"><code>{{ pythonCode }}</code></pre>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
     <!-- Tutorial Components -->
     <TutorialWelcome />
     <TutorialModal />
@@ -2044,6 +2226,30 @@ onUnmounted(() => {
 
     <!-- CTF Result Popup -->
     <CTFResultPopup v-if="ros && connected" :ros="ros" />
+
+    <!-- QR Code Modal for Block Scanning -->
+    <Transition name="fade">
+      <div v-if="showQRCode" class="qr-modal-overlay" @click.self="showQRCode = false">
+        <div class="qr-modal">
+          <div class="qr-modal-header">
+            <h3>Scan Physical Blocks</h3>
+            <button @click="showQRCode = false" class="qr-close-btn">&times;</button>
+          </div>
+          <div class="qr-modal-content">
+            <p>Scan this QR code with your phone to upload a photo of physical Blockly blocks</p>
+            <div class="qr-code-container">
+              <img
+                :src="`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(scanPageUrl)}`"
+                alt="QR Code"
+                class="qr-code-image"
+              />
+            </div>
+            <p class="qr-url">{{ scanPageUrl }}</p>
+            <a :href="scanPageUrl" target="_blank" class="qr-link-btn">Open Scan Page</a>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -2726,5 +2932,240 @@ button:disabled {
 .menu-fade-leave-to {
   opacity: 0;
   transform: translateY(-8px);
+}
+
+/* QR Code Modal */
+.qr-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.qr-modal {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border-radius: 16px;
+  max-width: 400px;
+  width: 90%;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.qr-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.qr-modal-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: white;
+}
+
+.qr-close-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.qr-close-btn:hover {
+  color: white;
+}
+
+.qr-modal-content {
+  padding: 1.5rem;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.qr-modal-content p {
+  margin: 0 0 1.25rem 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.qr-code-container {
+  background: white;
+  padding: 1rem;
+  border-radius: 12px;
+  display: inline-block;
+  margin-bottom: 1rem;
+}
+
+.qr-code-image {
+  display: block;
+  width: 200px;
+  height: 200px;
+}
+
+.qr-url {
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.5);
+  word-break: break-all;
+  margin-bottom: 1rem !important;
+}
+
+.qr-link-btn {
+  display: inline-block;
+  background: linear-gradient(135deg, #2196F3, #1976D2);
+  color: white;
+  text-decoration: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: transform 0.2s;
+}
+
+.qr-link-btn:hover {
+  transform: scale(1.02);
+}
+
+/* Python Code Overlay */
+.python-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 1rem;
+}
+
+.python-modal {
+  background: #1e1e1e;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.python-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  background: #252526;
+  border-bottom: 1px solid #333;
+}
+
+.python-modal-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: #cccccc;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.python-modal-header h3::before {
+  content: '🐍';
+}
+
+.python-modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.python-copy-btn {
+  background: #0e639c;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.python-copy-btn:hover {
+  background: #1177bb;
+}
+
+.python-copy-btn.success {
+  background: #4caf50;
+}
+
+.python-close-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.python-close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.python-modal-content {
+  flex: 1;
+  overflow: auto;
+  padding: 0;
+}
+
+.python-code {
+  margin: 0;
+  padding: 1rem 1.25rem;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #d4d4d4;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.python-code code {
+  font-family: inherit;
+}
+
+.python-modal-content::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.python-modal-content::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+.python-modal-content::-webkit-scrollbar-thumb {
+  background: #424242;
+  border-radius: 5px;
+}
+
+.python-modal-content::-webkit-scrollbar-thumb:hover {
+  background: #4f4f4f;
 }
 </style>

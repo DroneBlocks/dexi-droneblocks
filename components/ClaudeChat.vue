@@ -62,7 +62,7 @@ const formatTime = (date: Date) => {
     </div>
 
     <!-- Messages -->
-    <div ref="chatContainer" class="flex-1 overflow-y-auto p-4 space-y-4">
+    <div ref="chatContainer" class="chat-messages flex-1 overflow-y-scroll p-4 space-y-4">
       <!-- Empty state -->
       <div
         v-if="!hasMessages"
@@ -159,3 +159,32 @@ const formatTime = (date: Date) => {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Always show vertical scrollbar in chat messages */
+.chat-messages {
+  overflow-y: scroll !important;
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: #888 #f1f1f1; /* Firefox */
+}
+
+/* Webkit browsers (Chrome, Safari, Edge) */
+.chat-messages::-webkit-scrollbar {
+  width: 8px;
+  display: block !important;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+  background: #e5e7eb;
+  border-radius: 4px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+  border-radius: 4px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+</style>

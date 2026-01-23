@@ -60,12 +60,20 @@ export class Navigation {
       },
       {
         "type": "nav_takeoff",
-        "message0": "takeoff to %1 meters",
+        "message0": "takeoff to %1 %2",
         "args0": [
           {
             "type": "input_value",
             "name": "ALTITUDE",
             "check": "Number"
+          },
+          {
+            "type": "field_dropdown",
+            "name": "UNIT",
+            "options": [
+              ["m", "m"],
+              ["ft", "ft"]
+            ]
           }
         ],
         "colour": "#4CAF50",
@@ -85,12 +93,20 @@ export class Navigation {
       },
       {
         "type": "nav_fly_forward",
-        "message0": "fly forward %1 meters",
+        "message0": "fly forward %1 %2",
         "args0": [
           {
             "type": "input_value",
             "name": "DISTANCE",
             "check": "Number"
+          },
+          {
+            "type": "field_dropdown",
+            "name": "UNIT",
+            "options": [
+              ["m", "m"],
+              ["ft", "ft"]
+            ]
           }
         ],
         "colour": "#3B82F6",
@@ -101,12 +117,20 @@ export class Navigation {
       },
       {
         "type": "nav_fly_backward",
-        "message0": "fly backward %1 meters",
+        "message0": "fly backward %1 %2",
         "args0": [
           {
             "type": "input_value",
             "name": "DISTANCE",
             "check": "Number"
+          },
+          {
+            "type": "field_dropdown",
+            "name": "UNIT",
+            "options": [
+              ["m", "m"],
+              ["ft", "ft"]
+            ]
           }
         ],
         "colour": "#3B82F6",
@@ -117,12 +141,20 @@ export class Navigation {
       },
       {
         "type": "nav_fly_left",
-        "message0": "fly left %1 meters",
+        "message0": "fly left %1 %2",
         "args0": [
           {
             "type": "input_value",
             "name": "DISTANCE",
             "check": "Number"
+          },
+          {
+            "type": "field_dropdown",
+            "name": "UNIT",
+            "options": [
+              ["m", "m"],
+              ["ft", "ft"]
+            ]
           }
         ],
         "colour": "#3B82F6",
@@ -133,12 +165,20 @@ export class Navigation {
       },
       {
         "type": "nav_fly_right",
-        "message0": "fly right %1 meters",
+        "message0": "fly right %1 %2",
         "args0": [
           {
             "type": "input_value",
             "name": "DISTANCE",
             "check": "Number"
+          },
+          {
+            "type": "field_dropdown",
+            "name": "UNIT",
+            "options": [
+              ["m", "m"],
+              ["ft", "ft"]
+            ]
           }
         ],
         "colour": "#3B82F6",
@@ -149,12 +189,20 @@ export class Navigation {
       },
       {
         "type": "nav_fly_up",
-        "message0": "fly up %1 meters",
+        "message0": "fly up %1 %2",
         "args0": [
           {
             "type": "input_value",
             "name": "DISTANCE",
             "check": "Number"
+          },
+          {
+            "type": "field_dropdown",
+            "name": "UNIT",
+            "options": [
+              ["m", "m"],
+              ["ft", "ft"]
+            ]
           }
         ],
         "colour": "#3B82F6",
@@ -165,12 +213,20 @@ export class Navigation {
       },
       {
         "type": "nav_fly_down",
-        "message0": "fly down %1 meters",
+        "message0": "fly down %1 %2",
         "args0": [
           {
             "type": "input_value",
             "name": "DISTANCE",
             "check": "Number"
+          },
+          {
+            "type": "field_dropdown",
+            "name": "UNIT",
+            "options": [
+              ["m", "m"],
+              ["ft", "ft"]
+            ]
           }
         ],
         "colour": "#3B82F6",
@@ -363,6 +419,16 @@ export class Navigation {
       }
     ]);
 
+    // Helper function to convert units to meters
+    const convertToMeters = (value: string, unit: string): string => {
+      switch (unit) {
+        case 'ft':
+          return `(${value} * 0.3048)`;
+        default:
+          return value;
+      }
+    };
+
     javascriptGenerator.forBlock['nav_arm'] = function(block: Blockly.Block, generator: JavascriptGenerator) {
       return `
 // Arm vehicle
@@ -431,13 +497,15 @@ await new Promise(resolve => setTimeout(resolve, 500)); // Wait for mode switch
 
     javascriptGenerator.forBlock['nav_takeoff'] = function(block: Blockly.Block, generator: JavascriptGenerator) {
       const altitude = generator.valueToCode(block, 'ALTITUDE', javascriptGenerator.ORDER_ATOMIC) || '2.0';
+      const unit = block.getFieldValue('UNIT') || 'm';
+      const altitudeInMeters = convertToMeters(altitude, unit);
       return `
-// Takeoff to ${altitude} meters
+// Takeoff to ${altitude} ${unit}
 offboardCommand.publish({
   command: 'offboard_takeoff',
-  distance_or_degrees: ${altitude}
+  distance_or_degrees: ${altitudeInMeters}
 });
-await new Promise(resolve => setTimeout(resolve, ${altitude} * 2000)); // Wait for takeoff
+await new Promise(resolve => setTimeout(resolve, ${altitudeInMeters} * 2000)); // Wait for takeoff
 `;
     }
 
@@ -454,73 +522,85 @@ await new Promise(resolve => setTimeout(resolve, 3000)); // Wait for landing
 
     javascriptGenerator.forBlock['nav_fly_forward'] = function(block: Blockly.Block, generator: JavascriptGenerator) {
       const distance = generator.valueToCode(block, 'DISTANCE', javascriptGenerator.ORDER_ATOMIC) || '1.0';
+      const unit = block.getFieldValue('UNIT') || 'm';
+      const distanceInMeters = convertToMeters(distance, unit);
       return `
-// Fly forward ${distance} meters
+// Fly forward ${distance} ${unit}
 offboardCommand.publish({
   command: 'fly_forward',
-  distance_or_degrees: ${distance}
+  distance_or_degrees: ${distanceInMeters}
 });
-await new Promise(resolve => setTimeout(resolve, ${distance} * 1000)); // Wait for movement
+await new Promise(resolve => setTimeout(resolve, ${distanceInMeters} * 1000)); // Wait for movement
 `;
     }
 
     javascriptGenerator.forBlock['nav_fly_backward'] = function(block: Blockly.Block, generator: JavascriptGenerator) {
       const distance = generator.valueToCode(block, 'DISTANCE', javascriptGenerator.ORDER_ATOMIC) || '1.0';
+      const unit = block.getFieldValue('UNIT') || 'm';
+      const distanceInMeters = convertToMeters(distance, unit);
       return `
-// Fly backward ${distance} meters
+// Fly backward ${distance} ${unit}
 offboardCommand.publish({
   command: 'fly_backward',
-  distance_or_degrees: ${distance}
+  distance_or_degrees: ${distanceInMeters}
 });
-await new Promise(resolve => setTimeout(resolve, ${distance} * 1000)); // Wait for movement
+await new Promise(resolve => setTimeout(resolve, ${distanceInMeters} * 1000)); // Wait for movement
 `;
     }
 
     javascriptGenerator.forBlock['nav_fly_left'] = function(block: Blockly.Block, generator: JavascriptGenerator) {
       const distance = generator.valueToCode(block, 'DISTANCE', javascriptGenerator.ORDER_ATOMIC) || '1.0';
+      const unit = block.getFieldValue('UNIT') || 'm';
+      const distanceInMeters = convertToMeters(distance, unit);
       return `
-// Fly left ${distance} meters
+// Fly left ${distance} ${unit}
 offboardCommand.publish({
   command: 'fly_left',
-  distance_or_degrees: ${distance}
+  distance_or_degrees: ${distanceInMeters}
 });
-await new Promise(resolve => setTimeout(resolve, ${distance} * 1000)); // Wait for movement
+await new Promise(resolve => setTimeout(resolve, ${distanceInMeters} * 1000)); // Wait for movement
 `;
     }
 
     javascriptGenerator.forBlock['nav_fly_right'] = function(block: Blockly.Block, generator: JavascriptGenerator) {
       const distance = generator.valueToCode(block, 'DISTANCE', javascriptGenerator.ORDER_ATOMIC) || '1.0';
+      const unit = block.getFieldValue('UNIT') || 'm';
+      const distanceInMeters = convertToMeters(distance, unit);
       return `
-// Fly right ${distance} meters
+// Fly right ${distance} ${unit}
 offboardCommand.publish({
   command: 'fly_right',
-  distance_or_degrees: ${distance}
+  distance_or_degrees: ${distanceInMeters}
 });
-await new Promise(resolve => setTimeout(resolve, ${distance} * 1000)); // Wait for movement
+await new Promise(resolve => setTimeout(resolve, ${distanceInMeters} * 1000)); // Wait for movement
 `;
     }
 
     javascriptGenerator.forBlock['nav_fly_up'] = function(block: Blockly.Block, generator: JavascriptGenerator) {
       const distance = generator.valueToCode(block, 'DISTANCE', javascriptGenerator.ORDER_ATOMIC) || '1.0';
+      const unit = block.getFieldValue('UNIT') || 'm';
+      const distanceInMeters = convertToMeters(distance, unit);
       return `
-// Fly up ${distance} meters
+// Fly up ${distance} ${unit}
 offboardCommand.publish({
   command: 'fly_up',
-  distance_or_degrees: ${distance}
+  distance_or_degrees: ${distanceInMeters}
 });
-await new Promise(resolve => setTimeout(resolve, ${distance} * 1000)); // Wait for movement
+await new Promise(resolve => setTimeout(resolve, ${distanceInMeters} * 1000)); // Wait for movement
 `;
     }
 
     javascriptGenerator.forBlock['nav_fly_down'] = function(block: Blockly.Block, generator: JavascriptGenerator) {
       const distance = generator.valueToCode(block, 'DISTANCE', javascriptGenerator.ORDER_ATOMIC) || '1.0';
+      const unit = block.getFieldValue('UNIT') || 'm';
+      const distanceInMeters = convertToMeters(distance, unit);
       return `
-// Fly down ${distance} meters
+// Fly down ${distance} ${unit}
 offboardCommand.publish({
   command: 'fly_down',
-  distance_or_degrees: ${distance}
+  distance_or_degrees: ${distanceInMeters}
 });
-await new Promise(resolve => setTimeout(resolve, ${distance} * 1000)); // Wait for movement
+await new Promise(resolve => setTimeout(resolve, ${distanceInMeters} * 1000)); // Wait for movement
 `;
     }
 

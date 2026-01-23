@@ -87,7 +87,7 @@ const simulatorUrl = computed(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-base-100 flex flex-col">
+  <div class="h-screen bg-base-100 flex flex-col overflow-hidden">
     <!-- Header -->
     <div class="navbar bg-base-200 border-b border-base-content/10 px-4">
       <div class="flex-1">
@@ -124,17 +124,17 @@ const simulatorUrl = computed(() => {
     </div>
 
     <!-- Main content: Chat left, Simulator right -->
-    <div class="flex-1 flex">
+    <div class="flex-1 flex overflow-hidden">
       <!-- Chat panel -->
-      <div class="w-1/2 p-4 border-r border-base-content/10">
-        <ClaudeChat :drone-context="droneContext" class="h-[calc(100vh-5rem)]" />
+      <div class="w-1/2 p-4 border-r border-base-content/10 overflow-hidden">
+        <ClaudeChat :drone-context="droneContext" class="h-full" />
       </div>
 
       <!-- Simulator panel -->
-      <div class="w-1/2 p-4">
+      <div class="w-1/2 p-4 overflow-hidden">
         <iframe
           :src="simulatorUrl"
-          class="w-full h-[calc(100vh-5rem)] rounded-lg border border-base-content/10"
+          class="w-full h-full rounded-lg border border-base-content/10"
           frameborder="0"
         ></iframe>
       </div>
