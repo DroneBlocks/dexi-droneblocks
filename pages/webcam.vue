@@ -135,8 +135,7 @@ const { getROSURL } = useROS()
 const unityUrl = ref('')
 if (process.client) {
   const hostname = window.location.hostname
-  const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:'
-  unityUrl.value = `${protocol}//${hostname}:1337`
+  unityUrl.value = `http://${hostname}:1337`
 }
 
 // Split panel state
