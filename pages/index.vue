@@ -2,15 +2,15 @@
   <div class="min-h-screen bg-slate-50">
     <!-- Header Section -->
     <div class="bg-white border-b border-slate-200">
-      <div class="container mx-auto px-6 py-8">
+      <div class="container mx-auto px-4 py-4">
         <div class="flex items-center justify-between">
           <div class="flex items-center">
-            <img src="~/assets/droneblocks_logo.svg" class="h-12" alt="DroneBlocks Logo" />
+            <img src="~/assets/droneblocks_logo.svg" class="h-10" alt="DroneBlocks Logo" />
           </div>
           <a
             href="https://github.com/DroneBlocks/dexi-os/releases/tag/v0.13"
             target="_blank"
-            class="px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors"
+            class="px-3 py-1.5 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors"
           >
             v0.13
           </a>
@@ -19,15 +19,15 @@
     </div>
 
     <!-- Main Content -->
-    <div class="container mx-auto px-6 py-12">
+    <div class="container mx-auto px-4 py-6">
       <!-- Section Title -->
-      <div class="mb-8">
-        <h2 class="text-xl font-semibold text-slate-900 mb-2">Development Tools</h2>
-        <p class="text-slate-600">Access all DEXI development and debugging tools</p>
+      <div class="mb-4">
+        <h2 class="text-lg font-semibold text-slate-900 mb-1">Development Tools</h2>
+        <p class="text-sm text-slate-600">Access all DEXI development and debugging tools</p>
       </div>
 
       <!-- Cards Grid -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-12">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
 
         <!-- DEXI GCS -->
         <NuxtLink to="/gcs" class="group card">
@@ -124,13 +124,13 @@
       </div>
 
       <!-- Section Title -->
-      <div class="mb-8">
-        <h2 class="text-xl font-semibold text-slate-900 mb-2">Resources & Support</h2>
-        <p class="text-slate-600">Documentation, source code, and community</p>
+      <div class="mb-4">
+        <h2 class="text-lg font-semibold text-slate-900 mb-1">Resources & Support</h2>
+        <p class="text-sm text-slate-600">Documentation, source code, and community</p>
       </div>
 
       <!-- Resources Grid -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
 
         <!-- AprilTag Visualizer -->
         <NuxtLink to="/apriltag" class="group card">
@@ -212,24 +212,24 @@ const hostname = process.client ? window.location.hostname : '192.168.4.1'
 }
 
 .card-content {
-  @apply p-6 flex flex-col h-full relative;
+  @apply p-4 flex flex-col h-full relative;
 }
 
 .icon-wrapper {
-  @apply w-14 h-14 rounded-lg flex items-center justify-center mb-4;
+  @apply w-12 h-12 rounded-lg flex items-center justify-center mb-3;
   @apply transition-transform duration-200 group-hover:scale-110;
 }
 
 .card-title {
-  @apply text-lg font-semibold text-slate-900 mb-2;
+  @apply text-base font-semibold text-slate-900 mb-1.5;
 }
 
 .card-description {
-  @apply text-sm text-slate-600 leading-relaxed flex-grow;
+  @apply text-sm text-slate-600 leading-snug flex-grow;
 }
 
 .card-arrow {
-  @apply absolute bottom-5 right-5 text-slate-400 text-xl;
+  @apply absolute bottom-4 right-4 text-slate-400 text-lg;
   @apply opacity-0 transform translate-x-2;
   @apply transition-all duration-200;
   @apply group-hover:opacity-100 group-hover:translate-x-0;
