@@ -1,7 +1,7 @@
 <template>
-  <div class="relative w-full h-full bg-gray-800 p-4 flex-1">
+  <div class="relative w-full h-full bg-gray-800 p-2 flex-1">
     <!-- Position Display Widget -->
-    <div class="absolute top-4 right-4 bg-gray-900/80 text-white p-3 rounded-lg shadow-lg z-10">
+    <div class="absolute top-2 right-2 bg-gray-900/80 text-white p-2 rounded-lg shadow-lg z-10">
       <div class="text-sm font-mono space-y-1">
         <div class="flex justify-between">
           <span class="text-gray-400">X:</span>

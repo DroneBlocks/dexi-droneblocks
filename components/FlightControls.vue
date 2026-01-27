@@ -1,7 +1,7 @@
 <template>
-  <div class="w-full bg-gray-900 text-white p-2 sm:p-4">
+  <div class="w-full bg-gray-900 text-white p-1.5 sm:p-2">
     <!-- Telemetry Display -->
-    <div class="flex flex-wrap items-center gap-2 sm:gap-4 md:gap-6 mb-2 sm:mb-4 text-xs sm:text-sm">
+    <div class="flex flex-wrap items-center gap-2 sm:gap-3 md:gap-4 mb-1.5 sm:mb-2 text-xs sm:text-sm">
       <!-- Flight Mode -->
       <div class="flex items-center space-x-1 sm:space-x-2">
         <FlightModeDisplay :ros="ros" class="font-mono" />
@@ -34,25 +34,25 @@
     </div>
 
     <!-- Control Buttons -->
-    <div class="flex flex-wrap items-center gap-2 sm:gap-4">
+    <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
       <!-- Mode Buttons -->
       <button
         @click="setMode(2)"
-        class="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm bg-blue-600 rounded-lg hover:bg-blue-700"
+        class="px-2 sm:px-2.5 py-0.5 sm:py-1 text-xs sm:text-sm bg-blue-600 rounded-lg hover:bg-blue-700"
       >
         <span class="hidden sm:inline">Position Mode</span>
         <span class="sm:hidden">Pos</span>
       </button>
       <button
         @click="setMode(17)"
-        class="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm bg-blue-600 rounded-lg hover:bg-blue-700"
+        class="px-2 sm:px-2.5 py-0.5 sm:py-1 text-xs sm:text-sm bg-blue-600 rounded-lg hover:bg-blue-700"
         style="display: none"
       >
         Takeoff Mode
       </button>
       <button
         @click="toggleOffboardMode"
-        class="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm rounded-lg"
+        class="px-2 sm:px-2.5 py-0.5 sm:py-1 text-xs sm:text-sm rounded-lg"
         :class="isOffboardActive ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'"
         style="display: none"
       >
@@ -63,7 +63,7 @@
       <button
         @click="armDrone"
         :disabled="isArmed"
-        class="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm rounded-lg"
+        class="px-2 sm:px-2.5 py-0.5 sm:py-1 text-xs sm:text-sm rounded-lg"
         :class="isArmed ? 'bg-green-600' : 'bg-red-600 hover:bg-red-700'"
       >
         {{ isArmed ? 'Armed' : 'Arm' }}
@@ -73,7 +73,7 @@
       <button
         @click="moveForward"
         :disabled="!isFlying"
-        class="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50"
+        class="px-2 sm:px-2.5 py-0.5 sm:py-1 text-xs sm:text-sm bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50"
         style="display: none"
       >
         Move Forward 3m
@@ -83,7 +83,7 @@
       <button
         @click="land"
         :disabled="!isFlying"
-        class="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm bg-yellow-600 rounded-lg hover:bg-yellow-700 disabled:opacity-50"
+        class="px-2 sm:px-2.5 py-0.5 sm:py-1 text-xs sm:text-sm bg-yellow-600 rounded-lg hover:bg-yellow-700 disabled:opacity-50"
       >
         Land
       </button>

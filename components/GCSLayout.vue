@@ -7,12 +7,12 @@
       <div class="flex-1 bg-black relative flex flex-col min-h-0">
         <!-- Tab Navigation -->
         <div class="bg-gray-800 border-b border-gray-700">
-          <nav class="flex space-x-4 sm:space-x-8 px-2 sm:px-4 overflow-x-auto">
+          <nav class="flex space-x-3 sm:space-x-6 px-1.5 sm:px-2 overflow-x-auto">
             <button
               v-for="tab in tabs"
               :key="tab.id"
               @click="activeTab = tab.id"
-              class="py-2 sm:py-3 px-1 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex-shrink-0"
+              class="py-1.5 sm:py-2 px-1 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex-shrink-0"
               :class="[
                 activeTab === tab.id
                   ? 'text-blue-400 border-blue-400'
@@ -24,7 +24,7 @@
             <!-- LED Panel Toggle Button (mobile only) -->
             <button
               @click="showLEDPanel = !showLEDPanel"
-              class="md:hidden py-2 sm:py-3 px-1 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ml-auto"
+              class="md:hidden py-1.5 sm:py-2 px-1 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ml-auto"
               :class="[
                 showLEDPanel
                   ? 'text-purple-400 border-purple-400'
@@ -39,7 +39,7 @@
         <!-- Tab Content -->
         <div class="flex-1 relative min-h-0">
           <!-- Camera Tab -->
-          <div v-if="activeTab === 'camera'" class="p-2 sm:p-4 h-full">
+          <div v-if="activeTab === 'camera'" class="p-1 sm:p-2 h-full">
             <CameraFeed :should-invert="mainMenuRef?.cameraInverted ?? false" />
           </div>
 
@@ -62,15 +62,15 @@
 
       <!-- Right Column - Hidden on mobile, shown on md+ OR when toggled -->
       <div
-        class="bg-gray-700 text-white p-3 sm:p-4 transition-all duration-300 overflow-y-auto"
+        class="bg-gray-700 text-white p-2 sm:p-3 transition-all duration-300 overflow-y-auto"
         :class="[
           showLEDPanel ? 'block' : 'hidden md:block',
           'w-full md:w-[200px] lg:w-[250px]',
           'max-h-[40vh] md:max-h-none'
         ]"
       >
-        <h3 class="text-base sm:text-lg font-bold mb-2">DEXI LED Ring</h3>
-        <div class="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-2 gap-1">
+        <h3 class="text-sm sm:text-base font-bold mb-1.5">DEXI LED Ring</h3>
+        <div class="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-2 gap-0.5">
           <div v-for="(color, name) in dexiLEDColors" :key="name"
                class="flex flex-col items-center p-0.5 rounded cursor-pointer hover:bg-gray-600 relative group"
                @click="setLEDColor(name)"
