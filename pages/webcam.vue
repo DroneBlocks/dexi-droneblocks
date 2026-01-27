@@ -118,6 +118,7 @@
           class="unity-iframe"
           frameborder="0"
           allowfullscreen
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; fullscreen; gamepad"
         ></iframe>
       </div>
     </div>
@@ -131,17 +132,31 @@ import { useROS } from '~/composables/useROS'
 
 const { getROSURL } = useROS()
 
-// Unity URL
+// URL parameters for tunnel-based access
 const unityUrl = ref('')
+const rosbridgeUrl = ref('')
+
 if (process.client) {
   const urlParams = new URLSearchParams(window.location.search)
-  const ip = urlParams.get('ip')
+  const unityUrlParam = urlParams.get('unityUrl')
+  const rosbridgeUrlParam = urlParams.get('rosbridgeUrl')
 
-  if (ip) {
-    // If IP provided via query param, use HTTP for Unity (doesn't need HTTPS)
-    unityUrl.value = `http://${ip}:1337`
+  // Handle rosbridge URL - convert https:// to wss:// for WebSocket
+  if (rosbridgeUrlParam) {
+    rosbridgeUrl.value = rosbridgeUrlParam.replace('https://', 'wss://').replace('http://', 'ws://')
+  }
+
+  // Handle Unity URL - append rosbridge param if available
+  if (unityUrlParam) {
+    // Use the provided Unity tunnel URL (HTTPS via Cloudflare tunnel)
+    if (rosbridgeUrl.value) {
+      // Pass rosbridge URL to Unity for its WebSocket connection
+      unityUrl.value = `${unityUrlParam}?rosbridge=${encodeURIComponent(rosbridgeUrl.value)}`
+    } else {
+      unityUrl.value = unityUrlParam
+    }
   } else {
-    // Fallback to current hostname
+    // Fallback to current hostname with matching protocol
     const hostname = window.location.hostname
     const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:'
     unityUrl.value = `${protocol}//${hostname}:1337`
@@ -217,8 +232,12 @@ const onDrag = (e: MouseEvent) => {
 
 // Initialize ROS connection
 const initROS = () => {
+  // Use tunnel URL if provided, otherwise fall back to hostname-based URL
+  const rosUrl = rosbridgeUrl.value || getROSURL()
+  console.log('Webcam: Connecting to ROS at', rosUrl)
+
   ros = new ROSLIB.Ros({
-    url: getROSURL()
+    url: rosUrl
   })
 
   ros.on('connection', () => {
