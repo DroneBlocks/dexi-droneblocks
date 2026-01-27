@@ -134,9 +134,18 @@ const { getROSURL } = useROS()
 // Unity URL
 const unityUrl = ref('')
 if (process.client) {
-  const hostname = window.location.hostname
-  const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:'
-  unityUrl.value = `${protocol}//${hostname}:1337`
+  const urlParams = new URLSearchParams(window.location.search)
+  const ip = urlParams.get('ip')
+
+  if (ip) {
+    // If IP provided via query param, use HTTP for Unity (doesn't need HTTPS)
+    unityUrl.value = `http://${ip}:1337`
+  } else {
+    // Fallback to current hostname
+    const hostname = window.location.hostname
+    const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:'
+    unityUrl.value = `${protocol}//${hostname}:1337`
+  }
 }
 
 // Split panel state
