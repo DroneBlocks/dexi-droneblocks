@@ -19,21 +19,23 @@ class DexiMission:
         while not self.client.wait_for_service(timeout_sec=1.0):
             self.node.get_logger().info('Waiting for service...')
 
-    def execute_command(self, command: str, value: float = 0.0):
+    def execute_command(self, command: str, parameter: float = 0.0, timeout: float = 30.0):
         request = ExecuteBlocklyCommand.Request()
         request.command = command
-        request.value = value
+        request.parameter = parameter
+        request.timeout = timeout
         future = self.client.call_async(request)
         rclpy.spin_until_future_complete(self.node, future)
         return future.result()
 
-    def execute_ned_command(self, north: float, east: float, down: float, yaw: float = 0.0):
+    def execute_ned_command(self, north: float, east: float, down: float, yaw: float = 0.0, timeout: float = 30.0):
         request = ExecuteBlocklyCommand.Request()
         request.command = 'goto_ned'
         request.north = north
         request.east = east
         request.down = down
         request.yaw = yaw
+        request.timeout = timeout
         future = self.client.call_async(request)
         rclpy.spin_until_future_complete(self.node, future)
         return future.result()
@@ -91,10 +93,20 @@ function indent(code: string, level: number = 1): string {
 function convertToMeters(value: string, unit: string): string {
   switch (unit) {
     case 'ft':
-      return `${value} * 0.3048`;
+      return `float(${value}) * 0.3048`;
     default:
-      return value;
+      return toFloat(value);
   }
+}
+
+// Ensure value is formatted as a Python float
+function toFloat(value: string): string {
+  // If it's already a float expression or has operators, wrap in float()
+  if (value.includes('.') || value.includes('*') || value.includes('/') || value.includes('(')) {
+    return value;
+  }
+  // Otherwise ensure it's a float by adding .0 or wrapping
+  return `float(${value})`;
 }
 
 // Block generators - maps block type to Python code generator
@@ -184,11 +196,11 @@ const blockGenerators: Record<string, BlockGenerator> = {
   },
   nav_yaw_left: (block, indentLevel) => {
     const degrees = getInputValue(block, 'DEGREES', '90');
-    return indent(`mission.execute_command('yaw_left', ${degrees})`, indentLevel);
+    return indent(`mission.execute_command('yaw_left', ${toFloat(degrees)})`, indentLevel);
   },
   nav_yaw_right: (block, indentLevel) => {
     const degrees = getInputValue(block, 'DEGREES', '90');
-    return indent(`mission.execute_command('yaw_right', ${degrees})`, indentLevel);
+    return indent(`mission.execute_command('yaw_right', ${toFloat(degrees)})`, indentLevel);
   },
   nav_wait: (block, indentLevel) => {
     const duration = getInputValue(block, 'DURATION', '1');
