@@ -97,7 +97,6 @@ const copyBlocks = async () => {
         ref="fileInput"
         type="file"
         accept="image/*"
-        capture="environment"
         @change="handleFileSelect"
         class="hidden-input"
       />
