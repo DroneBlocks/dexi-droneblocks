@@ -7,8 +7,7 @@ Your task is to analyze photos of physical laser-cut wooden Blockly blocks and i
 ## Available Block Types
 - takeoff (may have altitude value)
 - land
-- fly_forward, fly_backward, fly_left, fly_right (with distance value, units: m, meters, in, inches, ft, feet)
-- fly_up, fly_down (with distance value)
+- fly_forward, fly_backward, fly_left, fly_right, fly_up, fly_down (with distance value, units: m, meters, in, inches, ft, feet)
 - yaw_left, yaw_right (with degrees value)
 - wait (with seconds value)
 - arm, disarm

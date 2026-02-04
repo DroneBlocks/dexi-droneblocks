@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 
 const fileInput = ref<HTMLInputElement | null>(null);
 const imagePreview = ref<string | null>(null);
@@ -7,6 +7,16 @@ const isAnalyzing = ref(false);
 const analysisResult = ref<any>(null);
 const error = ref<string | null>(null);
 const copied = ref(false);
+const sentToSession = ref(false);
+
+// Get session ID from URL if present
+const sessionId = ref<string | null>(null);
+if (process.client) {
+  const urlParams = new URLSearchParams(window.location.search);
+  sessionId.value = urlParams.get('session');
+}
+
+const isSessionMode = computed(() => !!sessionId.value);
 
 const handleFileSelect = (event: Event) => {
   const input = event.target as HTMLInputElement;
@@ -56,12 +66,41 @@ const analyzeImage = async () => {
   }
 };
 
+const sendToSession = async () => {
+  if (!analysisResult.value?.blocks || !sessionId.value) return;
+
+  try {
+    const response = await fetch(`/api/session/${sessionId.value}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        blocks: analysisResult.value.blocks,
+        description: analysisResult.value.description,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to send to session');
+    }
+
+    sentToSession.value = true;
+    setTimeout(() => sentToSession.value = false, 3000);
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to send blocks';
+  }
+};
+
 const loadInDroneBlocks = () => {
   if (analysisResult.value?.blocks) {
-    // Store blocks in localStorage for the droneblocks page to pick up
-    localStorage.setItem('scanned_blocks', JSON.stringify(analysisResult.value.blocks));
-    // Navigate to droneblocks page
-    window.location.href = '/droneblocks?load=scanned';
+    if (isSessionMode.value) {
+      // Send to session instead of navigating
+      sendToSession();
+    } else {
+      // Store blocks in localStorage for the droneblocks page to pick up
+      localStorage.setItem('scanned_blocks', JSON.stringify(analysisResult.value.blocks));
+      // Navigate to droneblocks page
+      window.location.href = '/droneblocks?load=scanned';
+    }
   }
 };
 
@@ -131,13 +170,21 @@ const copyBlocks = async () => {
           <strong>Mission:</strong> {{ analysisResult.description }}
         </div>
 
+        <div v-if="sentToSession" class="success-message">
+          Blocks sent to display!
+        </div>
+
         <div class="results-actions">
-          <button @click="loadInDroneBlocks" class="load-btn">
-            Load in DroneBlocks
+          <button @click="loadInDroneBlocks" class="load-btn" :class="{ 'btn-sent': sentToSession }">
+            {{ isSessionMode ? (sentToSession ? 'Sent!' : 'Send to Display') : 'Load in DroneBlocks' }}
           </button>
-          <button @click="copyBlocks" class="copy-btn">
+          <button v-if="!isSessionMode" @click="copyBlocks" class="copy-btn">
             {{ copied ? 'Copied!' : 'Copy Blocks' }}
           </button>
+        </div>
+
+        <div v-if="isSessionMode" class="session-info">
+          Session: {{ sessionId }}
         </div>
       </div>
     </main>
@@ -354,5 +401,27 @@ const copyBlocks = async () => {
 
 .copy-btn:hover {
   background: rgba(255, 255, 255, 0.2);
+}
+
+.success-message {
+  background: rgba(76, 175, 80, 0.3);
+  border: 1px solid #4CAF50;
+  color: #81c784;
+  padding: 1rem;
+  border-radius: 8px;
+  text-align: center;
+  margin-bottom: 1rem;
+  font-weight: 500;
+}
+
+.btn-sent {
+  background: linear-gradient(135deg, #4CAF50, #45a049) !important;
+}
+
+.session-info {
+  margin-top: 1rem;
+  text-align: center;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.5);
 }
 </style>

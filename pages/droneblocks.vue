@@ -34,6 +34,11 @@ const showKeyboardControl = ref(false);
 const showQRCode = ref(false);
 const scanPageUrl = ref('');
 
+// Session-based scanning (phone to big screen)
+const sessionId = ref('');
+const sessionActive = ref(false);
+const sessionEventSource = ref<EventSource | null>(null);
+
 // View mode: 'simulator' or 'drone'
 const viewMode = ref<'simulator' | 'drone'>('simulator');
 
@@ -121,12 +126,34 @@ const nedHeading = ref<number>(0);
 
 // Unity simulator URL - use current hostname
 const unityUrl = ref('');
+const baseUrl = ref('');
 if (process.client) {
   const hostname = window.location.hostname;
   const port = window.location.port;
   unityUrl.value = `http://${hostname}:1337`;
-  scanPageUrl.value = `${window.location.protocol}//${hostname}${port ? ':' + port : ''}/scan`;
+  baseUrl.value = `${window.location.protocol}//${hostname}${port ? ':' + port : ''}`;
+  scanPageUrl.value = `${baseUrl.value}/scan`;
 }
+
+// Generate a simple session ID
+const generateSessionId = () => {
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
+};
+
+// Open QR modal and start session
+const openScanSession = () => {
+  const id = generateSessionId();
+  scanPageUrl.value = `${baseUrl.value}/scan?session=${id}`;
+  startSession(id);
+  showQRCode.value = true;
+  showMenu.value = false;
+};
+
+// Close QR modal and stop session
+const closeScanSession = () => {
+  stopSession();
+  showQRCode.value = false;
+};
 
 const options = {
   media: 'https://unpkg.com/blockly@11.0.0/media/',
@@ -836,6 +863,14 @@ const getInputValue = (block: any, inputName: string, defaultValue: number): num
   return defaultValue;
 };
 
+// Helper function to convert distance/altitude to meters based on unit
+const convertToMetersRuntime = (value: number, unit: string): number => {
+  if (unit === 'ft') {
+    return value * 0.3048;
+  }
+  return value;
+};
+
 const runMission = async () => {
   if (!connected.value || !blocklyCommandService.value) {
     displayNotification('Please connect to ROS first!', 'error');
@@ -884,7 +919,10 @@ const runMission = async () => {
           await executeCommandWithService('stop_offboard_heartbeat', 0, 5);
         } else if (blockType === 'nav_takeoff') {
           const altitude = getInputValue(block, 'ALTITUDE', 2.0);
-          await executeCommandWithService('offboard_takeoff', altitude, 30);
+          const unit = block.getFieldValue('UNIT') || 'm';
+          const altitudeMeters = convertToMetersRuntime(altitude, unit);
+          console.log(`Takeoff: ${altitude} ${unit} = ${altitudeMeters.toFixed(2)}m`);
+          await executeCommandWithService('offboard_takeoff', altitudeMeters, 30);
         } else if (blockType === 'nav_land') {
           await executeCommandWithService('land', 0, 30);
         } else if (blockType === 'nav_switch_offboard_mode') {
@@ -893,22 +931,40 @@ const runMission = async () => {
           await executeCommandWithService('switch_hold_mode', 0, 5);
         } else if (blockType === 'nav_fly_forward') {
           const distance = getInputValue(block, 'DISTANCE', 1.0);
-          await executeCommandWithService('fly_forward', distance, 30);
+          const unit = block.getFieldValue('UNIT') || 'm';
+          const distanceMeters = convertToMetersRuntime(distance, unit);
+          console.log(`Fly forward: ${distance} ${unit} = ${distanceMeters.toFixed(2)}m`);
+          await executeCommandWithService('fly_forward', distanceMeters, 30);
         } else if (blockType === 'nav_fly_backward') {
           const distance = getInputValue(block, 'DISTANCE', 1.0);
-          await executeCommandWithService('fly_backward', distance, 30);
+          const unit = block.getFieldValue('UNIT') || 'm';
+          const distanceMeters = convertToMetersRuntime(distance, unit);
+          console.log(`Fly backward: ${distance} ${unit} = ${distanceMeters.toFixed(2)}m`);
+          await executeCommandWithService('fly_backward', distanceMeters, 30);
         } else if (blockType === 'nav_fly_left') {
           const distance = getInputValue(block, 'DISTANCE', 1.0);
-          await executeCommandWithService('fly_left', distance, 30);
+          const unit = block.getFieldValue('UNIT') || 'm';
+          const distanceMeters = convertToMetersRuntime(distance, unit);
+          console.log(`Fly left: ${distance} ${unit} = ${distanceMeters.toFixed(2)}m`);
+          await executeCommandWithService('fly_left', distanceMeters, 30);
         } else if (blockType === 'nav_fly_right') {
           const distance = getInputValue(block, 'DISTANCE', 1.0);
-          await executeCommandWithService('fly_right', distance, 30);
+          const unit = block.getFieldValue('UNIT') || 'm';
+          const distanceMeters = convertToMetersRuntime(distance, unit);
+          console.log(`Fly right: ${distance} ${unit} = ${distanceMeters.toFixed(2)}m`);
+          await executeCommandWithService('fly_right', distanceMeters, 30);
         } else if (blockType === 'nav_fly_up') {
           const distance = getInputValue(block, 'DISTANCE', 1.0);
-          await executeCommandWithService('fly_up', distance, 30);
+          const unit = block.getFieldValue('UNIT') || 'm';
+          const distanceMeters = convertToMetersRuntime(distance, unit);
+          console.log(`Fly up: ${distance} ${unit} = ${distanceMeters.toFixed(2)}m`);
+          await executeCommandWithService('fly_up', distanceMeters, 30);
         } else if (blockType === 'nav_fly_down') {
           const distance = getInputValue(block, 'DISTANCE', 1.0);
-          await executeCommandWithService('fly_down', distance, 30);
+          const unit = block.getFieldValue('UNIT') || 'm';
+          const distanceMeters = convertToMetersRuntime(distance, unit);
+          console.log(`Fly down: ${distance} ${unit} = ${distanceMeters.toFixed(2)}m`);
+          await executeCommandWithService('fly_down', distanceMeters, 30);
         } else if (blockType === 'nav_yaw_left') {
           const degrees = getInputValue(block, 'DEGREES', 90);
           await executeCommandWithService('yaw_left', degrees, 10);
@@ -1763,6 +1819,86 @@ const loadScannedBlocks = () => {
   }
 };
 
+// Load blocks directly from data (used by session sync)
+const loadBlocksFromData = (blocks: any[]) => {
+  if (!foo.value || !foo.value.workspace) return;
+
+  const workspace = foo.value.workspace;
+  workspace.clear();
+
+  let previousBlock: Blockly.Block | null = null;
+
+  for (const blockData of blocks) {
+    const blockType = mapScannedBlockType(blockData.type);
+    if (!blockType) continue;
+
+    const block = workspace.newBlock(blockType);
+    block.initSvg();
+    block.render();
+
+    if (previousBlock) {
+      const previousConnection = previousBlock.nextConnection;
+      const currentConnection = block.previousConnection;
+      if (previousConnection && currentConnection) {
+        previousConnection.connect(currentConnection);
+      }
+    } else {
+      block.moveBy(50, 50);
+    }
+
+    setBlockValue(block, blockData);
+    previousBlock = block;
+  }
+
+  Blockly.svgResize(workspace);
+  updatePythonCode();
+  saveWorkspace();
+  showNotificationMessage('Blocks received from phone!', 'success');
+};
+
+// Start listening for session updates via SSE
+const startSession = (id: string) => {
+  if (sessionEventSource.value) {
+    sessionEventSource.value.close();
+  }
+
+  sessionId.value = id;
+  sessionActive.value = true;
+
+  const eventSource = new EventSource(`/api/session/${id}/stream`);
+
+  eventSource.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.type === 'blocks' && data.blocks) {
+        loadBlocksFromData(data.blocks);
+        // Dismiss QR modal and stop session after receiving blocks
+        showQRCode.value = false;
+        stopSession();
+      }
+    } catch (e) {
+      console.error('Failed to parse session event:', e);
+    }
+  };
+
+  eventSource.onerror = () => {
+    console.error('Session SSE error, reconnecting...');
+    sessionActive.value = false;
+  };
+
+  sessionEventSource.value = eventSource;
+};
+
+// Stop session listening
+const stopSession = () => {
+  if (sessionEventSource.value) {
+    sessionEventSource.value.close();
+    sessionEventSource.value = null;
+  }
+  sessionId.value = '';
+  sessionActive.value = false;
+};
+
 // Map scanned block types to Blockly block types
 const mapScannedBlockType = (type: string): string | null => {
   const mapping: Record<string, string> = {
@@ -1783,6 +1919,17 @@ const mapScannedBlockType = (type: string): string | null => {
     'switch_offboard_mode': 'nav_switch_offboard_mode',
   };
   return mapping[type.toLowerCase()] || null;
+};
+
+// Normalize unit from scan to Blockly dropdown value
+const normalizeUnit = (unit: string | undefined): string | null => {
+  if (!unit) return null;
+  const u = unit.toLowerCase().trim();
+  if (u === 'm' || u === 'meters' || u === 'meter') return 'm';
+  if (u === 'ft' || u === 'feet' || u === 'foot') return 'ft';
+  // Convert inches to feet (12 inches = 1 foot) - handled at value level if needed
+  if (u === 'in' || u === 'inches' || u === 'inch') return 'ft';
+  return null;
 };
 
 // Set value on a block's input
@@ -1814,6 +1961,20 @@ const setBlockValue = (block: Blockly.Block, blockData: any) => {
   const numberOutput = numberBlock.outputConnection;
   if (numberOutput) {
     input.connection.connect(numberOutput);
+  }
+
+  // Set unit if provided and block supports it (fly blocks)
+  if (type.includes('fly_') || type === 'nav_takeoff') {
+    const normalizedUnit = normalizeUnit(blockData.unit);
+    if (normalizedUnit) {
+      const field = block.getField('UNIT');
+      if (field) {
+        field.setValue(normalizedUnit);
+        console.log(`Set UNIT field to '${normalizedUnit}' for ${type}, verify: ${block.getFieldValue('UNIT')}`);
+      } else {
+        console.warn(`UNIT field not found on block type: ${type}`);
+      }
+    }
   }
 };
 
@@ -2031,6 +2192,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   disconnectFromROS();
+  stopSession();
   document.removeEventListener('mousemove', onDrag);
   document.removeEventListener('mouseup', stopDragging);
 });
@@ -2099,7 +2261,7 @@ onUnmounted(() => {
                 <span>🐍</span>
                 <span>Python Code</span>
               </button>
-              <button @click="showQRCode = true; showMenu = false" class="menu-item">
+              <button @click="openScanSession" class="menu-item">
                 <span>📷</span>
                 <span>Scan Blocks</span>
               </button>
@@ -2229,11 +2391,11 @@ onUnmounted(() => {
 
     <!-- QR Code Modal for Block Scanning -->
     <Transition name="fade">
-      <div v-if="showQRCode" class="qr-modal-overlay" @click.self="showQRCode = false">
+      <div v-if="showQRCode" class="qr-modal-overlay" @click.self="closeScanSession">
         <div class="qr-modal">
           <div class="qr-modal-header">
             <h3>Scan Physical Blocks</h3>
-            <button @click="showQRCode = false" class="qr-close-btn">&times;</button>
+            <button @click="closeScanSession" class="qr-close-btn">&times;</button>
           </div>
           <div class="qr-modal-content">
             <p>Scan this QR code with your phone to upload a photo of physical Blockly blocks</p>
@@ -2243,6 +2405,11 @@ onUnmounted(() => {
                 alt="QR Code"
                 class="qr-code-image"
               />
+            </div>
+            <div class="session-status" :class="{ active: sessionActive }">
+              <span class="session-dot"></span>
+              <span>Session: {{ sessionId }}</span>
+              <span v-if="sessionActive"> - Waiting for scan...</span>
             </div>
             <p class="qr-url">{{ scanPageUrl }}</p>
             <a :href="scanPageUrl" target="_blank" class="qr-link-btn">Open Scan Page</a>
@@ -3033,6 +3200,40 @@ button:disabled {
 
 .qr-link-btn:hover {
   transform: scale(1.02);
+}
+
+.session-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  margin: 1rem 0;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.session-status.active {
+  color: white;
+}
+
+.session-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #666;
+}
+
+.session-status.active .session-dot {
+  background: #4CAF50;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 /* Python Code Overlay */

@@ -10,6 +10,53 @@ const ros = ref<ROSLIB.Ros | null>(null);
 const rosConnected = ref(false);
 const droneContext = ref<DroneContext>({});
 
+// Server-side rosbridge connection state
+const serverRosbridgeUrl = ref("");
+const serverRosbridgeConnected = ref(false);
+const connectionMode = ref<"sim" | "hardware">("sim");
+const hardwareIp = ref("192.168.1.1");
+const isConnecting = ref(false);
+
+// Fetch current server-side rosbridge status
+const fetchRosbridgeStatus = async () => {
+  try {
+    const status = await $fetch("/api/rosbridge/status");
+    serverRosbridgeUrl.value = status.url;
+    serverRosbridgeConnected.value = status.connected;
+    // Determine mode from URL
+    connectionMode.value = status.url.includes("localhost") ? "sim" : "hardware";
+  } catch (e) {
+    console.error("Failed to fetch rosbridge status:", e);
+  }
+};
+
+// Switch server-side rosbridge connection
+const switchConnection = async (mode: "sim" | "hardware") => {
+  isConnecting.value = true;
+  const url = mode === "sim"
+    ? "ws://localhost:9090"
+    : `ws://${hardwareIp.value}:9090`;
+
+  try {
+    const result = await $fetch("/api/rosbridge/connect", {
+      method: "POST",
+      body: { url },
+    });
+    serverRosbridgeUrl.value = result.url;
+    serverRosbridgeConnected.value = result.connected;
+    connectionMode.value = mode;
+
+    // Save hardware IP for next time
+    if (mode === "hardware") {
+      localStorage.setItem("dexi-hardware-ip", hardwareIp.value);
+    }
+  } catch (e) {
+    console.error("Failed to switch rosbridge:", e);
+  } finally {
+    isConnecting.value = false;
+  }
+};
+
 // ROS connection
 const connectROS = () => {
   const url = getROSURL();
@@ -70,7 +117,14 @@ const subscribeToTopics = () => {
 };
 
 onMounted(() => {
+  // Load saved hardware IP from localStorage
+  const savedIp = localStorage.getItem("dexi-hardware-ip");
+  if (savedIp) {
+    hardwareIp.value = savedIp;
+  }
+
   connectROS();
+  fetchRosbridgeStatus();
 });
 
 onUnmounted(() => {
@@ -97,6 +151,43 @@ const simulatorUrl = computed(() => {
         </NuxtLink>
       </div>
       <div class="flex-none flex items-center gap-4">
+        <!-- Connection mode switcher -->
+        <div class="flex items-center gap-2">
+          <div class="join">
+            <button
+              :class="['join-item btn btn-sm', connectionMode === 'sim' ? 'btn-primary' : 'btn-ghost']"
+              :disabled="isConnecting"
+              @click="switchConnection('sim')"
+            >
+              Sim
+            </button>
+            <button
+              :class="['join-item btn btn-sm', connectionMode === 'hardware' ? 'btn-primary' : 'btn-ghost']"
+              :disabled="isConnecting"
+              @click="switchConnection('hardware')"
+            >
+              Hardware
+            </button>
+          </div>
+          <input
+            v-if="connectionMode === 'hardware'"
+            v-model="hardwareIp"
+            type="text"
+            placeholder="Hardware IP"
+            class="input input-sm input-bordered w-32"
+            @keyup.enter="switchConnection('hardware')"
+          />
+          <div
+            :class="[
+              'badge badge-sm',
+              serverRosbridgeConnected ? 'badge-success' : 'badge-error',
+            ]"
+            :title="serverRosbridgeUrl"
+          >
+            {{ isConnecting ? 'Connecting...' : (serverRosbridgeConnected ? 'API Connected' : 'API Disconnected') }}
+          </div>
+        </div>
+
         <!-- Drone context badges -->
         <div class="flex items-center gap-2 text-sm">
           <div
@@ -117,7 +208,7 @@ const simulatorUrl = computed(() => {
             {{ droneContext.altitude?.toFixed(1) }}m
           </div>
           <div v-if="droneContext.battery !== undefined" class="badge badge-ghost">
-            🔋 {{ droneContext.battery }}%
+            {{ droneContext.battery }}%
           </div>
         </div>
       </div>

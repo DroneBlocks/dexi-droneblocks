@@ -247,10 +247,11 @@ export class RosbridgeClient {
 
 // Singleton instance
 let clientInstance: RosbridgeClient | null = null;
+let currentUrl: string = process.env.ROSBRIDGE_URL || "ws://localhost:9090";
 
 export function getRosbridgeClient(url?: string): RosbridgeClient {
   if (!clientInstance) {
-    const rosbridgeUrl = url || process.env.ROSBRIDGE_URL || "ws://localhost:9090";
+    const rosbridgeUrl = url || currentUrl;
     clientInstance = new RosbridgeClient(rosbridgeUrl);
   }
   return clientInstance;
@@ -262,4 +263,35 @@ export async function getConnectedClient(url?: string): Promise<RosbridgeClient>
     await client.connect();
   }
   return client;
+}
+
+/**
+ * Get the current rosbridge URL
+ */
+export function getCurrentRosbridgeUrl(): string {
+  return currentUrl;
+}
+
+/**
+ * Reset the client and optionally set a new URL.
+ * This disconnects the existing client and clears the singleton,
+ * so the next call to getRosbridgeClient will create a new connection.
+ */
+export function resetRosbridgeClient(newUrl?: string): void {
+  if (clientInstance) {
+    clientInstance.disconnect();
+    clientInstance = null;
+  }
+  if (newUrl) {
+    currentUrl = newUrl;
+  }
+}
+
+/**
+ * Switch to a new rosbridge URL and connect.
+ * Returns the connected client.
+ */
+export async function switchRosbridgeUrl(newUrl: string): Promise<RosbridgeClient> {
+  resetRosbridgeClient(newUrl);
+  return getConnectedClient();
 }
