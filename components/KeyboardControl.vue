@@ -56,20 +56,20 @@
         </button>
       </div>
 
-      <!-- Last Command (if active) -->
-      <div v-if="isActive && lastCommand" class="text-xs bg-gray-700 p-2 rounded">
-        <span class="text-gray-400">Last:</span>
-        <span class="ml-1 font-mono">{{ lastCommand.command }}</span>
-        <span v-if="lastCommand.distance_or_degrees" class="text-gray-400">
-          ({{ lastCommand.distance_or_degrees }}{{ lastCommand.command.includes('yaw') ? '°' : 'm' }})
+      <!-- Active keys display -->
+      <div v-if="isActive" class="text-xs bg-gray-700 p-2 rounded">
+        <span class="text-gray-400">Active:</span>
+        <span v-if="activeKeys.size > 0" class="ml-1 font-mono">
+          {{ Array.from(activeKeys).map(k => keyLabels[k] || k).join(' + ') }}
         </span>
+        <span v-else class="ml-1 text-gray-500">none</span>
       </div>
 
       <!-- Controls -->
       <div class="mt-3 space-y-3">
         <!-- Quick Key Reference -->
         <div class="text-xs">
-          <div class="font-medium mb-2">Controls:</div>
+          <div class="font-medium mb-2">Controls (hold for continuous):</div>
           <div class="grid grid-cols-2 gap-[50px]">
             <!-- Left Column: T W S A D -->
             <div class="space-y-1">
@@ -79,11 +79,11 @@
               </div>
               <div class="flex justify-between">
                 <span class="font-mono bg-gray-700 px-1 rounded">W</span>
-                <span class="text-gray-300">Fly Up</span>
+                <span class="text-gray-300">Up</span>
               </div>
               <div class="flex justify-between">
                 <span class="font-mono bg-gray-700 px-1 rounded">S</span>
-                <span class="text-gray-300">Fly Down</span>
+                <span class="text-gray-300">Down</span>
               </div>
               <div class="flex justify-between">
                 <span class="font-mono bg-gray-700 px-1 rounded">A</span>
@@ -111,11 +111,11 @@
               </div>
               <div class="flex justify-between">
                 <span class="font-mono bg-gray-700 px-1 rounded">←</span>
-                <span class="text-gray-300">Fly Left</span>
+                <span class="text-gray-300">Left</span>
               </div>
               <div class="flex justify-between">
                 <span class="font-mono bg-gray-700 px-1 rounded">→</span>
-                <span class="text-gray-300">Fly Right</span>
+                <span class="text-gray-300">Right</span>
               </div>
             </div>
           </div>
@@ -136,7 +136,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import ROSLIB from 'roslib'
 import { useROS } from '~/composables/useROS'
 
@@ -156,7 +156,6 @@ const ros = ref(null)
 const cmdPublisher = ref(null)
 const isConnected = ref(false)
 const isActive = ref(false)
-const lastCommand = ref(null)
 
 // Widget state
 const widgetRef = ref(null)
@@ -166,29 +165,101 @@ const isDragging = ref(false)
 const dragOffset = ref({ x: 0, y: 0 })
 const hasFocus = ref(true)
 
-// Key mapping based on dexi_offboard implementation
-const keyMappings = {
-  // Left stick - Throttle/Yaw (WASD)
-  'w': { command: 'fly_up', distance_or_degrees: 1.0 },
-  'W': { command: 'fly_up', distance_or_degrees: 1.0 },
-  's': { command: 'fly_down', distance_or_degrees: 1.0 },
-  'S': { command: 'fly_down', distance_or_degrees: 1.0 },
-  'a': { command: 'yaw_left', distance_or_degrees: 90.0 },
-  'A': { command: 'yaw_left', distance_or_degrees: 90.0 },
-  'd': { command: 'yaw_right', distance_or_degrees: 90.0 },
-  'D': { command: 'yaw_right', distance_or_degrees: 90.0 },
+// Velocity control state
+const activeKeys = reactive(new Set())
+let velocityInterval = null
 
-  // Right stick - Pitch/Roll (Arrow keys)
-  'ArrowUp': { command: 'fly_forward', distance_or_degrees: 1.0 },
-  'ArrowDown': { command: 'fly_backward', distance_or_degrees: 1.0 },
-  'ArrowLeft': { command: 'fly_left', distance_or_degrees: 1.0 },
-  'ArrowRight': { command: 'fly_right', distance_or_degrees: 1.0 },
+// Velocity speeds
+const XY_SPEED = 1.0    // m/s
+const Z_SPEED = 0.3     // m/s
+const YAW_RATE = 45.0   // deg/s
 
-  // Takeoff and Land
-  't': { command: 'fly_up', distance_or_degrees: 1.0 },
-  'T': { command: 'fly_up', distance_or_degrees: 1.0 },
-  'l': { command: 'land', distance_or_degrees: 0.0 },
-  'L': { command: 'land', distance_or_degrees: 0.0 }
+// Key labels for display
+const keyLabels = {
+  'ArrowUp': '↑',
+  'ArrowDown': '↓',
+  'ArrowLeft': '←',
+  'ArrowRight': '→',
+  'w': 'W', 'W': 'W',
+  's': 'S', 'S': 'S',
+  'a': 'A', 'A': 'A',
+  'd': 'D', 'D': 'D'
+}
+
+// Keys that produce velocity commands (normalized to lowercase for tracking)
+const velocityKeys = new Set([
+  'w', 's', 'a', 'd',
+  'arrowup', 'arrowdown', 'arrowleft', 'arrowright'
+])
+
+const normalizeKey = (key) => key.toLowerCase()
+
+const computeVelocity = () => {
+  let vx = 0, vy = 0, vz = 0, yawRate = 0
+
+  // Arrows: body-frame XY
+  if (activeKeys.has('arrowup'))    vx += XY_SPEED
+  if (activeKeys.has('arrowdown'))  vx -= XY_SPEED
+  if (activeKeys.has('arrowright')) vy += XY_SPEED
+  if (activeKeys.has('arrowleft')) vy -= XY_SPEED
+
+  // W/S: up/down (NED: negative Z = up)
+  if (activeKeys.has('w')) vz -= Z_SPEED
+  if (activeKeys.has('s')) vz += Z_SPEED
+
+  // A/D: yaw
+  if (activeKeys.has('d')) yawRate += YAW_RATE
+  if (activeKeys.has('a')) yawRate -= YAW_RATE
+
+  return { vx, vy, vz, yawRate }
+}
+
+const sendVelocityCommand = () => {
+  if (!isConnected.value || !cmdPublisher.value) return
+
+  const { vx, vy, vz, yawRate } = computeVelocity()
+
+  const message = new ROSLIB.Message({
+    command: 'set_velocity_body',
+    distance_or_degrees: 0.0,
+    north: vx,
+    east: vy,
+    down: vz,
+    yaw: yawRate
+  })
+
+  cmdPublisher.value.publish(message)
+}
+
+const sendStopVelocity = () => {
+  if (!isConnected.value || !cmdPublisher.value) return
+
+  const message = new ROSLIB.Message({
+    command: 'stop_velocity',
+    distance_or_degrees: 0.0,
+    north: 0.0,
+    east: 0.0,
+    down: 0.0,
+    yaw: 0.0
+  })
+
+  cmdPublisher.value.publish(message)
+  console.log('Sent stop_velocity')
+}
+
+const startVelocityLoop = () => {
+  if (velocityInterval) return
+  // Publish at 10Hz while any velocity key is held
+  sendVelocityCommand()
+  velocityInterval = setInterval(sendVelocityCommand, 100)
+}
+
+const stopVelocityLoop = () => {
+  if (velocityInterval) {
+    clearInterval(velocityInterval)
+    velocityInterval = null
+  }
+  sendStopVelocity()
 }
 
 const initializeROS = () => {
@@ -235,27 +306,61 @@ const sendCommand = (command, distance_or_degrees = 0.0) => {
   })
 
   cmdPublisher.value.publish(message)
-  lastCommand.value = { command, distance_or_degrees }
   console.log(`Sent command: ${command} (${distance_or_degrees})`)
 }
 
-const handleKeyPress = (event) => {
+const handleKeyDown = (event) => {
   if (!isActive.value || !props.isOpen) return
 
   const key = event.key
-  const mapping = keyMappings[key]
+  const normKey = normalizeKey(key)
 
-  if (mapping) {
+  // Takeoff (one-shot, not velocity)
+  if (normKey === 't') {
     event.preventDefault()
+    sendCommand('offboard_takeoff', 2.0)
+    return
+  }
 
-    // Special handling for land command - stop heartbeat first
-    if (key === 'l' || key === 'L') {
-      sendCommand('stop_offboard_heartbeat')
-      console.log('Stopping offboard heartbeat before landing')
-      isActive.value = false
+  // Land (one-shot)
+  if (normKey === 'l') {
+    event.preventDefault()
+    sendCommand('stop_offboard_heartbeat')
+    console.log('Stopping offboard heartbeat before landing')
+    sendCommand('land')
+    isActive.value = false
+    // Clean up velocity state
+    activeKeys.clear()
+    stopVelocityLoop()
+    return
+  }
+
+  // Velocity keys
+  if (velocityKeys.has(normKey)) {
+    event.preventDefault()
+    if (!activeKeys.has(normKey)) {
+      activeKeys.add(normKey)
+      startVelocityLoop()
     }
+  }
+}
 
-    sendCommand(mapping.command, mapping.distance_or_degrees)
+const handleKeyUp = (event) => {
+  if (!isActive.value || !props.isOpen) return
+
+  const normKey = normalizeKey(event.key)
+
+  if (velocityKeys.has(normKey) && activeKeys.has(normKey)) {
+    event.preventDefault()
+    activeKeys.delete(normKey)
+
+    if (activeKeys.size === 0) {
+      // All keys released — stop and hold
+      stopVelocityLoop()
+    } else {
+      // Still have keys held — update velocity immediately
+      sendVelocityCommand()
+    }
   }
 }
 
@@ -268,6 +373,11 @@ const toggleControl = () => {
     recaptureFocus()
   } else {
     // Stopping keyboard control - disable offboard mode
+    activeKeys.clear()
+    if (velocityInterval) {
+      clearInterval(velocityInterval)
+      velocityInterval = null
+    }
     sendCommand('stop_offboard_heartbeat')
     console.log('Stopping offboard heartbeat')
     isActive.value = false
@@ -292,6 +402,11 @@ const handleWindowFocus = () => {
 
 const handleWindowBlur = () => {
   hasFocus.value = false
+  // Release all keys when window loses focus to prevent stuck velocity
+  if (activeKeys.size > 0) {
+    activeKeys.clear()
+    stopVelocityLoop()
+  }
 }
 
 // Drag functionality - supports both mouse and touch
@@ -348,8 +463,14 @@ const stopDrag = () => {
 }
 
 const close = () => {
-  // Stop keyboard control and heartbeat when closing the widget
+  // Stop velocity and heartbeat when closing the widget
+  activeKeys.clear()
+  if (velocityInterval) {
+    clearInterval(velocityInterval)
+    velocityInterval = null
+  }
   if (isActive.value) {
+    sendStopVelocity()
     sendCommand('stop_offboard_heartbeat')
     console.log('Stopping offboard heartbeat on widget close')
     isActive.value = false
@@ -359,13 +480,20 @@ const close = () => {
 
 onMounted(() => {
   initializeROS()
-  document.addEventListener('keydown', handleKeyPress)
+  document.addEventListener('keydown', handleKeyDown)
+  document.addEventListener('keyup', handleKeyUp)
   window.addEventListener('focus', handleWindowFocus)
   window.addEventListener('blur', handleWindowBlur)
 })
 
 onUnmounted(() => {
-  document.removeEventListener('keydown', handleKeyPress)
+  // Clean up velocity loop
+  if (velocityInterval) {
+    clearInterval(velocityInterval)
+    velocityInterval = null
+  }
+  document.removeEventListener('keydown', handleKeyDown)
+  document.removeEventListener('keyup', handleKeyUp)
   document.removeEventListener('mousemove', onDrag)
   document.removeEventListener('mouseup', stopDrag)
   document.removeEventListener('touchmove', onDrag)
