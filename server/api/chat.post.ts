@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { ROS_TOOLS, executeRosTool } from "../utils/rosTools";
+import { getConnectedClient } from "../utils/rosbridge";
 
 const SYSTEM_PROMPT = `You are DEXI, an AI drone pilot assistant. You have direct access to ROS2 tools to discover and control the drone system.
 
@@ -58,9 +59,44 @@ interface ChatRequest {
     battery?: number;
     mode?: string;
   };
+  backend?: "claude" | "local";
 }
 
-export default defineEventHandler(async (event) => {
+async function handleLocalLLM(body: ChatRequest) {
+  // Get the latest user message
+  const lastUserMsg = [...body.messages].reverse().find((m) => m.role === "user");
+  if (!lastUserMsg) {
+    throw createError({
+      statusCode: 400,
+      message: "No user message found",
+    });
+  }
+
+  try {
+    const client = await getConnectedClient();
+    const result = await client.callService(
+      "/dexi/llm/llm_node/chat",
+      { prompt: lastUserMsg.content },
+      120000
+    );
+
+    console.log("[Local LLM] Raw result:", JSON.stringify(result));
+
+    return {
+      message: result?.response || "No response from local LLM",
+      toolResults: result?.commands_executed?.length ? result.commands_executed : undefined,
+    };
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("Local LLM error:", err);
+    throw createError({
+      statusCode: 502,
+      message: `Local LLM service error: ${err.message}`,
+    });
+  }
+}
+
+async function handleClaude(body: ChatRequest) {
   const config = useRuntimeConfig();
   const apiKey = config.anthropicApiKey || process.env.ANTHROPIC_API_KEY;
 
@@ -68,15 +104,6 @@ export default defineEventHandler(async (event) => {
     throw createError({
       statusCode: 500,
       message: "ANTHROPIC_API_KEY not configured",
-    });
-  }
-
-  const body = await readBody<ChatRequest>(event);
-
-  if (!body.messages || !Array.isArray(body.messages)) {
-    throw createError({
-      statusCode: 400,
-      message: "Invalid request: messages array required",
     });
   }
 
@@ -183,7 +210,24 @@ export default defineEventHandler(async (event) => {
     console.error("Chat API error:", err);
     throw createError({
       statusCode: err.status || 500,
-      message: err.message || "Failed to get response from Claude",
+      message: err.message || "Failed to get response",
     });
   }
+}
+
+export default defineEventHandler(async (event) => {
+  const body = await readBody<ChatRequest>(event);
+
+  if (!body.messages || !Array.isArray(body.messages)) {
+    throw createError({
+      statusCode: 400,
+      message: "Invalid request: messages array required",
+    });
+  }
+
+  if (body.backend === "local") {
+    return handleLocalLLM(body);
+  }
+
+  return handleClaude(body);
 });
