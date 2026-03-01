@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted } from "vue";
 import ROSLIB from "roslib";
 import { useROS } from "~/composables/useROS";
-import type { DroneContext } from "~/composables/useClaudeChat";
+import type { DroneContext } from "~/composables/useChat";
 
 const { getROSURL } = useROS();
 
@@ -127,7 +127,7 @@ const simulatorUrl = computed(() => {
     <div class="flex-1 flex overflow-hidden">
       <!-- Chat panel -->
       <div class="w-1/2 p-4 border-r border-base-content/10 overflow-hidden">
-        <ClaudeChat :drone-context="droneContext" class="h-full" />
+        <Chat :drone-context="droneContext" class="h-full" />
       </div>
 
       <!-- Simulator panel -->

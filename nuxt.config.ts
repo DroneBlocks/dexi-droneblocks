@@ -1,11 +1,14 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   devtools: { enabled: true },
-  css: ['~/assets/css/main.css'],
   runtimeConfig: {
     // Server-side only (not exposed to client)
     anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+    public: {
+      rosHost: '', // override via NUXT_PUBLIC_ROS_HOST env var
+    },
   },
+  css: ['~/assets/css/main.css'],
   postcss: {
     plugins: {
       tailwindcss: {},

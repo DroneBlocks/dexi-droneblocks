@@ -86,7 +86,11 @@ export class RosbridgeClient {
         if (pending) {
           clearTimeout(pending.timer);
           this.pendingRequests.delete(msg.id);
-          pending.resolve(msg.values ?? msg.result);
+          if (msg.result === false) {
+            pending.reject(new Error(msg.values || "Service call failed"));
+          } else {
+            pending.resolve(msg.values ?? msg.result);
+          }
         }
       }
 
@@ -149,6 +153,7 @@ export class RosbridgeClient {
         id,
         service,
         args,
+        timeout: Math.floor(timeout / 1000),
       });
     });
   }
