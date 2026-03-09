@@ -5,6 +5,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     // Server-side only (not exposed to client)
     anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+    chatLogUrl: process.env.CHAT_LOG_URL,
   },
   postcss: {
     plugins: {

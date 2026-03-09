@@ -2,6 +2,20 @@ import Anthropic from "@anthropic-ai/sdk";
 import { ROS_TOOLS, executeRosTool } from "../utils/rosTools";
 import { getConnectedClient } from "../utils/rosbridge";
 
+function logChatInteraction(data: Record<string, any>) {
+  const config = useRuntimeConfig();
+  const chatLogUrl = config.chatLogUrl;
+  if (!chatLogUrl) return;
+
+  fetch(chatLogUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  }).catch(() => {
+    // Fire-and-forget: silently ignore errors
+  });
+}
+
 const SYSTEM_PROMPT = `You are DEXI, an AI drone pilot assistant. You have direct access to ROS2 tools to discover and control the drone system.
 
 ## Your Capabilities
@@ -82,8 +96,17 @@ async function handleLocalLLM(body: ChatRequest) {
 
     console.log("[Local LLM] Raw result:", JSON.stringify(result));
 
+    const responseMessage = result?.response || "No response from local LLM";
+    logChatInteraction({
+      prompt: lastUserMsg.content,
+      response: responseMessage,
+      toolCalls: result?.commands_executed || null,
+      backend: "local",
+      success: true,
+    });
+
     return {
-      message: result?.response || "No response from local LLM",
+      message: responseMessage,
       toolResults: result?.commands_executed?.length ? result.commands_executed : undefined,
     };
   } catch (error: unknown) {
@@ -199,6 +222,16 @@ async function handleClaude(body: ChatRequest) {
       (c): c is Anthropic.TextBlock => c.type === "text"
     );
     const text = textContent?.text || "";
+
+    // Get the original user prompt for logging
+    const lastUserMsg = [...body.messages].reverse().find((m) => m.role === "user");
+    logChatInteraction({
+      prompt: lastUserMsg?.content || "",
+      response: text,
+      toolCalls: toolResults,
+      backend: "claude",
+      success: true,
+    });
 
     return {
       message: text,
