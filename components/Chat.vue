@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { ref, nextTick, watch } from "vue";
-import { useClaudeChat, type DroneContext } from "~/composables/useClaudeChat";
+import { useChat, type DroneContext, type ChatBackend } from "~/composables/useChat";
 
 const props = defineProps<{
   droneContext?: DroneContext;
 }>();
 
-const { messages, isLoading, error, hasMessages, sendMessage, clearMessages } =
-  useClaudeChat();
+const { messages, isLoading, error, hasMessages, backend, setBackend, sendMessage, clearMessages } =
+  useChat();
 
 const inputMessage = ref("");
 const chatContainer = ref<HTMLElement | null>(null);
@@ -52,13 +52,30 @@ const formatTime = (date: Date) => {
         <span class="text-2xl">🚁</span>
         <span class="font-semibold text-base-content">DEXI Chat</span>
       </div>
-      <button
-        v-if="hasMessages"
-        @click="clearMessages"
-        class="btn btn-ghost btn-sm text-base-content/60 hover:text-base-content"
-      >
-        Clear
-      </button>
+      <div class="flex items-center gap-2">
+        <!-- Backend toggle -->
+        <div class="join">
+          <button
+            :class="['join-item btn btn-xs', backend === 'claude' ? 'btn-primary' : 'btn-ghost']"
+            @click="setBackend('claude')"
+          >
+            Claude
+          </button>
+          <button
+            :class="['join-item btn btn-xs', backend === 'local' ? 'btn-primary' : 'btn-ghost']"
+            @click="setBackend('local')"
+          >
+            Local LLM
+          </button>
+        </div>
+        <button
+          v-if="hasMessages"
+          @click="clearMessages"
+          class="btn btn-ghost btn-sm text-base-content/60 hover:text-base-content"
+        >
+          Clear
+        </button>
+      </div>
     </div>
 
     <!-- Messages -->

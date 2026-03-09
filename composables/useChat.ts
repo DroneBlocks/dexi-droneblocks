@@ -15,12 +15,19 @@ export interface DroneContext {
   mode?: string;
 }
 
+export type ChatBackend = "claude" | "local";
+
 const messages = ref<ChatMessage[]>([]);
 const isLoading = ref(false);
 const error = ref<string | null>(null);
+const backend = ref<ChatBackend>("claude");
 
-export function useClaudeChat() {
+export function useChat() {
   const hasMessages = computed(() => messages.value.length > 0);
+
+  const setBackend = (b: ChatBackend) => {
+    backend.value = b;
+  };
 
   const addMessage = (role: "user" | "assistant", content: string, toolResults?: string[]) => {
     messages.value.push({
@@ -54,6 +61,7 @@ export function useClaudeChat() {
         body: {
           messages: history,
           context,
+          backend: backend.value,
         },
       });
 
@@ -79,6 +87,8 @@ export function useClaudeChat() {
     isLoading: computed(() => isLoading.value),
     error: computed(() => error.value),
     hasMessages,
+    backend: computed(() => backend.value),
+    setBackend,
     sendMessage,
     clearMessages,
   };
