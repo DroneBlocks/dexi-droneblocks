@@ -2,9 +2,11 @@
 import { ref, onMounted, onUnmounted } from "vue";
 import ROSLIB from "roslib";
 import { useROS } from "~/composables/useROS";
+import { useDexiPlatform } from "~/composables/useDexiPlatform";
 import type { DroneContext } from "~/composables/useChat";
 
 const { getROSURL } = useROS();
+const { isSim } = useDexiPlatform();
 
 const ros = ref<ROSLIB.Ros | null>(null);
 const rosConnected = ref(false);
@@ -123,15 +125,15 @@ const simulatorUrl = computed(() => {
       </div>
     </div>
 
-    <!-- Main content: Chat left, Simulator right -->
+    <!-- Main content: Chat left, Simulator right (sim only) -->
     <div class="flex-1 flex overflow-hidden">
       <!-- Chat panel -->
-      <div class="w-1/2 p-4 border-r border-base-content/10 overflow-hidden">
+      <div :class="isSim ? 'w-1/2' : 'w-full'" class="p-4 border-r border-base-content/10 overflow-hidden">
         <Chat :drone-context="droneContext" class="h-full" />
       </div>
 
-      <!-- Simulator panel -->
-      <div class="w-1/2 p-4 overflow-hidden">
+      <!-- Simulator panel (only in sim mode) -->
+      <div v-if="isSim" class="w-1/2 p-4 overflow-hidden">
         <iframe
           :src="simulatorUrl"
           class="w-full h-full rounded-lg border border-base-content/10"
