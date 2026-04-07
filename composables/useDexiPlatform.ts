@@ -25,8 +25,8 @@ const queryParam = (ros: ROSLIB.Ros, name: string): Promise<any> => {
 const loadPlatformParams = async (ros: ROSLIB.Ros) => {
   try {
     const [platformValue, keyboardValue] = await Promise.allSettled([
-      queryParam(ros, '/rosbridge_websocket:dexi_platform'),
-      queryParam(ros, '/rosbridge_websocket:dexi_keyboard_control'),
+      queryParam(ros, '/dexi_platform_params:dexi_platform'),
+      queryParam(ros, '/dexi_platform_params:dexi_keyboard_control'),
     ])
 
     if (platformValue.status === 'fulfilled' && platformValue.value) {
