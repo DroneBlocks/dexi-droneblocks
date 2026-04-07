@@ -680,7 +680,9 @@ const connectToROS = () => {
       const localPositionTopic = new ROSLIB.Topic({
         ros: ros.value as ROSLIB.Ros,
         name: '/fmu/out/vehicle_local_position',
-        messageType: 'px4_msgs/msg/VehicleLocalPosition'
+        messageType: 'px4_msgs/msg/VehicleLocalPosition',
+        throttle_rate: 200,
+        queue_length: 1,
       });
 
       localPositionTopic.subscribe((message: any) => {

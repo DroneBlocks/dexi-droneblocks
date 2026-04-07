@@ -68,7 +68,9 @@ const subscribeToVehicleStatus = (topicName: string, isFallback: boolean = false
   vehicleStatusTopic = new ROSLIB.Topic({
     ros: props.ros,
     name: topicName,
-    messageType: 'px4_msgs/msg/VehicleStatus'
+    messageType: 'px4_msgs/msg/VehicleStatus',
+    throttle_rate: 500,
+    queue_length: 1,
   })
 
   vehicleStatusTopic.subscribe((message: any) => {

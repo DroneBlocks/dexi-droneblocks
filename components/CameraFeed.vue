@@ -48,6 +48,8 @@ export default {
       ros: ros,
       name: this.topicName,
       messageType: 'sensor_msgs/CompressedImage',
+      throttle_rate: 200,
+      queue_length: 1,
     });
 
     this.imageTopic.subscribe((message) => {      

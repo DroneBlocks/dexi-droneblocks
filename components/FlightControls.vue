@@ -232,7 +232,9 @@ onMounted(() => {
   batteryStatusTopic = new ROSLIB.Topic({
     ros: ros.value as ROSLIB.Ros,
     name: '/fmu/out/battery_status',
-    messageType: 'px4_msgs/msg/BatteryStatus'
+    messageType: 'px4_msgs/msg/BatteryStatus',
+    throttle_rate: 1000,
+    queue_length: 1,
   })
 
   batteryStatusTopic.subscribe((message: any) => {
@@ -246,7 +248,9 @@ onMounted(() => {
   gpsPositionTopic = new ROSLIB.Topic({
     ros: ros.value as ROSLIB.Ros,
     name: '/fmu/out/vehicle_gps_position',
-    messageType: 'px4_msgs/msg/VehicleGpsPosition'
+    messageType: 'px4_msgs/msg/VehicleGpsPosition',
+    throttle_rate: 1000,
+    queue_length: 1,
   })
 
   gpsPositionTopic.subscribe((message: any) => {
@@ -261,7 +265,9 @@ onMounted(() => {
   localPositionTopic = new ROSLIB.Topic({
     ros: ros.value as ROSLIB.Ros,
     name: '/fmu/out/vehicle_local_position',
-    messageType: 'px4_msgs/msg/VehicleLocalPosition'
+    messageType: 'px4_msgs/msg/VehicleLocalPosition',
+    throttle_rate: 200,
+    queue_length: 1,
   })
 
   localPositionTopic.subscribe((message: any) => {
@@ -279,7 +285,9 @@ onMounted(() => {
   attitudeTopic = new ROSLIB.Topic({
     ros: ros.value as ROSLIB.Ros,
     name: '/fmu/out/vehicle_attitude',
-    messageType: 'px4_msgs/msg/VehicleAttitude'
+    messageType: 'px4_msgs/msg/VehicleAttitude',
+    throttle_rate: 200,
+    queue_length: 1,
   })
 
   attitudeTopic.subscribe((message: any) => {
@@ -340,7 +348,9 @@ const subscribeToVehicleStatus = (topicName: string, isFallback: boolean = false
   vehicleStatusTopic = new ROSLIB.Topic({
     ros: ros.value as ROSLIB.Ros,
     name: topicName,
-    messageType: 'px4_msgs/msg/VehicleStatus'
+    messageType: 'px4_msgs/msg/VehicleStatus',
+    throttle_rate: 500,
+    queue_length: 1,
   })
 
   vehicleStatusTopic.subscribe((message: any) => {

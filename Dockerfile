@@ -16,6 +16,9 @@ FROM node:20-slim AS runner
 
 WORKDIR /app
 
+# Install iw for wifi SSID detection, nmcli for network management
+RUN apt-get update && apt-get install -y --no-install-recommends iw network-manager && rm -rf /var/lib/apt/lists/*
+
 # Copy built output
 COPY --from=builder /app/.output ./.output
 COPY --from=builder /app/package.json ./

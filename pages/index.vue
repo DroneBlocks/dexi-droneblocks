@@ -8,11 +8,11 @@
             <img src="~/assets/droneblocks_logo.svg" class="h-12" alt="DroneBlocks Logo" />
           </div>
           <a
-            href="https://github.com/DroneBlocks/dexi-os/releases/tag/v0.13"
+            href="https://github.com/DroneBlocks/dexi-os/releases/tag/v0.20"
             target="_blank"
             class="px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors"
           >
-            v0.13
+            v0.20
           </a>
         </div>
       </div>
@@ -141,6 +141,20 @@
             <h3 class="card-title">AprilTag Visualizer</h3>
             <p class="card-description">
               Verify pose estimates before position hold
+            </p>
+            <div class="card-arrow">→</div>
+          </div>
+        </NuxtLink>
+
+        <!-- System Status -->
+        <NuxtLink to="/status" class="group card">
+          <div class="card-content">
+            <div class="icon-wrapper bg-green-50">
+              <span class="text-3xl">📊</span>
+            </div>
+            <h3 class="card-title">System Status</h3>
+            <p class="card-description">
+              Network, memory, and system health monitoring
             </p>
             <div class="card-arrow">→</div>
           </div>
