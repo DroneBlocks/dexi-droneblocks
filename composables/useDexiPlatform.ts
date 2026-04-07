@@ -3,8 +3,10 @@ import ROSLIB from 'roslib'
 
 export type DexiPlatform = 'ark_cm4' | 'cm5' | 'pi5' | 'unity_sim' | 'jetson' | 'unknown'
 
-const platform = ref<DexiPlatform>('unknown')
-const keyboardControlEnabled = ref(false)
+const isDevMode = process.env.NODE_ENV === 'development'
+
+const platform = ref<DexiPlatform>(isDevMode ? 'unity_sim' : 'unknown')
+const keyboardControlEnabled = ref(isDevMode)
 const paramsLoaded = ref(false)
 
 const isSim = computed(() => platform.value === 'unity_sim')
