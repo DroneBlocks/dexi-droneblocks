@@ -6,7 +6,7 @@ import { useDexiPlatform } from "~/composables/useDexiPlatform";
 import type { DroneContext } from "~/composables/useChat";
 
 const { getROSURL } = useROS();
-const { isSim } = useDexiPlatform();
+const { isSim, loadPlatformParams } = useDexiPlatform();
 
 const ros = ref<ROSLIB.Ros | null>(null);
 const rosConnected = ref(false);
@@ -20,6 +20,7 @@ const connectROS = () => {
   ros.value.on("connection", () => {
     rosConnected.value = true;
     subscribeToTopics();
+    loadPlatformParams(ros.value as ROSLIB.Ros);
   });
 
   ros.value.on("close", () => {
