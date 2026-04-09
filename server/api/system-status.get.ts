@@ -95,7 +95,8 @@ async function getNetworkInterfaces(): Promise<NetworkInterface[]> {
     if (dev === "lo" || dev.startsWith("veth")) continue;
 
     const operstate = await readProc(`/sys/class/net/${dev}/operstate`);
-    if (operstate !== "up") continue;
+    // USB cellular dongles (cdc_ether) report "unknown" operstate — treat as up
+    if (operstate !== "up" && operstate !== "unknown") continue;
 
     let type = "ethernet";
     try {
