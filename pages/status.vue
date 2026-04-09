@@ -45,6 +45,10 @@
                 <span class="status-label">Hostname</span>
                 <span class="status-value font-mono">{{ status!.hostname }}</span>
               </div>
+              <div v-if="status!.model" class="status-row">
+                <span class="status-label">Model</span>
+                <span class="status-value font-mono text-xs">{{ status!.model }}</span>
+              </div>
               <div class="status-row">
                 <span class="status-label">Uptime</span>
                 <span class="status-value">{{ status!.uptime || 'N/A' }}</span>
@@ -289,6 +293,7 @@ interface SavedConnection {
 
 interface SystemStatus {
   hostname: string;
+  model: string | null;
   uptime: string;
   memory: { totalMb: number; usedMb: number; freeMb: number } | null;
   cpuTempC: number | null;

@@ -172,12 +172,13 @@ async function getWifiMode(): Promise<"hotspot" | "client" | "disconnected"> {
 }
 
 export default defineEventHandler(async () => {
-  const [hostname, uptimeRaw, memRaw, tempRaw, interfaces, savedConnections, wifiMode] =
+  const [hostname, uptimeRaw, memRaw, tempRaw, model, interfaces, savedConnections, wifiMode] =
     await Promise.all([
       run("hostname"),
       readProc("/proc/uptime"),
       readProc("/proc/meminfo"),
       readProc("/sys/class/thermal/thermal_zone0/temp"),
+      readProc("/etc/device-model").then(v => v || readProc("/proc/device-tree/model")),
       getNetworkInterfaces(),
       getSavedConnections(),
       getWifiMode(),
@@ -202,6 +203,7 @@ export default defineEventHandler(async () => {
 
   return {
     hostname,
+    model: model || null,
     uptime,
     memory,
     cpuTempC,
