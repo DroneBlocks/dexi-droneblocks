@@ -1,5 +1,11 @@
 export const useROS = () => {
   const getROSURL = (): string => {
+    // Allow override via ?rosHost=192.168.68.60 query param (for local dev pointing at remote drone)
+    const params = new URLSearchParams(window.location.search)
+    const rosHost = params.get('rosHost')
+    if (rosHost) {
+      return `ws://${rosHost}:9090`
+    }
     const hostname = window.location.hostname
     const isSecure = window.location.protocol === 'https:'
     const protocol = isSecure ? 'wss:' : 'ws:'
