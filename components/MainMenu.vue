@@ -82,15 +82,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import ROSLIB from 'roslib'
-import { useROS } from '~/composables/useROS'
+import { ref } from 'vue'
+import { useDexiPlatform } from '~/composables/useDexiPlatform'
 
 const isOpen = ref(false)
 const cameraInverted = ref(false) // Camera displays right-side up by default
-const keyboardControlAvailable = ref(false)
 
-const { getROSURL, isDevMode } = useROS()
+const { keyboardControlEnabled: keyboardControlAvailable } = useDexiPlatform()
 
 const openGitHub = () => {
   window.open('https://github.com/droneblocks', '_blank')
@@ -113,45 +111,6 @@ const openKeyboardControl = () => {
   emit('open-keyboard-control')
   isOpen.value = false
 }
-
-const checkKeyboardControlAvailability = () => {
-  // In dev mode, always enable keyboard control for UI testing
-  if (isDevMode()) {
-    keyboardControlAvailable.value = true
-    return
-  }
-
-  try {
-    const ros = new ROSLIB.Ros({
-      url: getROSURL()
-    })
-
-    ros.on('connection', () => {
-      const paramClient = new ROSLIB.Param({
-        ros: ros,
-        name: '/dexi/px4_offboard_manager:keyboard_control_enabled'
-      })
-
-      paramClient.get((value) => {
-        keyboardControlAvailable.value = value === true
-        ros.close()
-      }, (error) => {
-        keyboardControlAvailable.value = false
-        ros.close()
-      })
-    })
-
-    ros.on('error', () => {
-      keyboardControlAvailable.value = false
-    })
-  } catch (error) {
-    keyboardControlAvailable.value = false
-  }
-}
-
-onMounted(() => {
-  checkKeyboardControlAvailability()
-})
 
 defineExpose({
   cameraInverted
