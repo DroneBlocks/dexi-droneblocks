@@ -19,47 +19,45 @@
       </div>
     </div>
 
-    <!-- Main Content -->
+    <!-- Main Content — 2-column layout -->
     <div class="flex-1 overflow-y-auto p-4">
-      <div class="max-w-4xl mx-auto">
-        <!-- Info Banner -->
-        <div class="bg-blue-900/30 border border-blue-700 rounded-lg p-4 mb-4">
-          <h3 class="text-blue-400 font-semibold mb-2">How to Use</h3>
-          <ul class="text-sm text-gray-300 space-y-1">
-            <li>1. Ensure AprilTag is visible to the camera</li>
-            <li>2. Wait for the stability indicator to show <span class="text-green-400 font-semibold">STABLE</span></li>
-            <li>3. Position variance should be under 5 cm for reliable position hold</li>
-            <li>4. When ready, the banner will show <span class="text-green-400 font-semibold">READY FOR POSITION HOLD</span></li>
-          </ul>
-        </div>
+      <div class="max-w-7xl mx-auto">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <!-- Left column: Camera + Stability + Event Log -->
+          <div class="flex flex-col gap-3">
+            <!-- Camera Feed (compact) -->
+            <div class="bg-gray-800 rounded-lg p-3">
+              <h3 class="text-sm text-gray-400 uppercase mb-2">Camera Feed</h3>
+              <div class="relative bg-gray-900 rounded overflow-hidden" style="aspect-ratio: 4/3;">
+                <CameraFeed topic-name="/cam0/image_raw/compressed" />
+              </div>
+            </div>
 
-        <!-- Camera Feed -->
-        <div class="bg-gray-800 rounded-lg p-4 mb-4">
-          <h3 class="text-sm text-gray-400 uppercase mb-3">Camera Feed</h3>
-          <div class="relative aspect-video bg-gray-900 rounded overflow-hidden">
-            <CameraFeed topic-name="/cam0/image_raw/compressed" />
+            <!-- Stability handled inside AprilTagVisualizer below -->
+
+            <!-- Event Log -->
+            <div class="bg-gray-800 rounded-lg p-3">
+              <h3 class="text-sm text-gray-400 uppercase mb-2">Event Log</h3>
+              <div class="bg-gray-900 rounded p-2 h-24 overflow-y-auto font-mono text-xs">
+                <div
+                  v-for="(log, index) in logs"
+                  :key="index"
+                  class="mb-1 py-1 px-2 rounded"
+                  :class="logClass(log.type)"
+                >
+                  <span class="text-gray-500 mr-2">{{ log.time }}</span>
+                  {{ log.message }}
+                </div>
+                <div v-if="logs.length === 0" class="text-gray-500">
+                  Waiting for events...
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
 
-        <!-- AprilTag Visualizer Component -->
-        <AprilTagVisualizer :ros="ros" />
-
-        <!-- Event Log -->
-        <div class="bg-gray-800 rounded-lg p-4 mt-4">
-          <h3 class="text-sm text-gray-400 uppercase mb-3">Event Log</h3>
-          <div class="bg-gray-900 rounded p-3 h-40 overflow-y-auto font-mono text-xs">
-            <div
-              v-for="(log, index) in logs"
-              :key="index"
-              class="mb-1 py-1 px-2 rounded"
-              :class="logClass(log.type)"
-            >
-              <span class="text-gray-500 mr-2">{{ log.time }}</span>
-              {{ log.message }}
-            </div>
-            <div v-if="logs.length === 0" class="text-gray-500">
-              Waiting for events...
-            </div>
+          <!-- Right column: Visualizer data panels -->
+          <div>
+            <AprilTagVisualizer :ros="ros" />
           </div>
         </div>
       </div>

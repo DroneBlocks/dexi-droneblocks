@@ -7,6 +7,7 @@ import { AprilTag } from '~/assets/ts/apriltag';
 import { javascriptGenerator } from 'blockly/javascript';
 import ROSLIB from 'roslib';
 import { useROS } from '~/composables/useROS';
+import { useDexiPlatform } from '~/composables/useDexiPlatform';
 import { useTutorial } from '~/tutorial';
 import TutorialWelcome from '~/tutorial/components/TutorialWelcome.vue';
 import TutorialModal from '~/tutorial/components/TutorialModal.vue';
@@ -607,6 +608,7 @@ const options = {
 };
 
 const { getROSURL } = useROS();
+const { isSim, keyboardControlEnabled, loadPlatformParams } = useDexiPlatform();
 
 const connectToROS = () => {
   try {
@@ -691,6 +693,14 @@ const connectToROS = () => {
         nedDown.value = message.z;
         // Convert heading from radians to degrees (0-360)
         nedHeading.value = ((message.heading * 180 / Math.PI) + 360) % 360;
+      });
+
+      // Query platform params and auto-set view mode
+      loadPlatformParams(ros.value as ROSLIB.Ros).then(() => {
+        const autoMode = isSim.value ? 'simulator' : 'drone';
+        viewMode.value = autoMode;
+        localStorage.setItem('droneblocks_view_mode', autoMode);
+        console.log(`View mode auto-set to '${autoMode}' from platform param`);
       });
 
       console.log('✅ Connected to ROS and services initialized');
@@ -2093,7 +2103,7 @@ onUnmounted(() => {
                 <span>🏠</span>
                 <span>Dashboard</span>
               </a>
-              <button @click="openKeyboardControl" class="menu-item">
+              <button v-if="keyboardControlEnabled" @click="openKeyboardControl" class="menu-item">
                 <span>⌨️</span>
                 <span>Keyboard Control</span>
               </button>
@@ -2220,7 +2230,7 @@ onUnmounted(() => {
 
     <!-- Keyboard Control -->
     <KeyboardControl
-      v-if="ros && connected"
+      v-if="ros && connected && keyboardControlEnabled"
       :ros="ros"
       :isOpen="showKeyboardControl"
       @close="showKeyboardControl = false"

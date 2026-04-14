@@ -1,20 +1,11 @@
 <template>
   <div class="apriltag-visualizer">
-    <!-- Stability Indicator -->
-    <div class="stability-section">
-      <div
-        class="stability-indicator"
-        :class="stabilityClass"
-      >
-        {{ stabilityText }}
-      </div>
-      <div class="stability-description">{{ stabilityDescription }}</div>
-      <div
-        class="ready-banner"
-        :class="readyBannerClass"
-      >
-        {{ readyBannerText }}
-      </div>
+    <!-- Compact Stability Banner -->
+    <div class="stability-bar" :class="readyBannerClass">
+      <div class="stability-dot" :class="stabilityClass"></div>
+      <span class="stability-bar-text">{{ stabilityText }}</span>
+      <span class="stability-bar-sep">|</span>
+      <span class="stability-bar-desc">{{ stabilityDescription }}</span>
     </div>
 
     <!-- Position Display -->
@@ -95,6 +86,38 @@
       </div>
     </div>
 
+    <!-- Sensor Fusion Status -->
+    <div class="data-section">
+      <h3 class="section-title">Sensor Fusion (EKF2)</h3>
+      <div class="fusion-grid">
+        <div class="fusion-item" :class="fusionOpticalFlow ? 'active' : 'inactive'">
+          <span class="fusion-indicator" :class="fusionOpticalFlow ? 'on' : 'off'"></span>
+          <div>
+            <span class="fusion-label">Optical Flow</span>
+            <span class="fusion-detail">~50Hz velocity</span>
+          </div>
+        </div>
+        <div class="fusion-item" :class="fusionRangeHeight ? 'active' : 'inactive'">
+          <span class="fusion-indicator" :class="fusionRangeHeight ? 'on' : 'off'"></span>
+          <div>
+            <span class="fusion-label">Range Sensor</span>
+            <span class="fusion-detail">~50Hz altitude</span>
+          </div>
+        </div>
+        <div class="fusion-item" :class="fusionEvPos ? 'active' : 'inactive'">
+          <span class="fusion-indicator" :class="fusionEvPos ? 'on' : 'off'"></span>
+          <div>
+            <span class="fusion-label">AprilTag Vision</span>
+            <span class="fusion-detail">{{ visionRate }} position</span>
+          </div>
+        </div>
+      </div>
+      <div class="fusion-altitude" v-if="ekfAltitude !== null">
+        <span class="fusion-alt-label">EKF2 Altitude</span>
+        <span class="fusion-alt-value">{{ ekfAltitude }} m</span>
+      </div>
+    </div>
+
     <!-- Position History Canvas -->
     <div class="data-section">
       <h3 class="section-title">Position History (10s)</h3>
@@ -116,9 +139,9 @@ const props = defineProps<{
   ros: ROSLIB.Ros | null
 }>()
 
-// Configuration
-const TARGET_TAG_ID = 0
+// Configuration — track any detected tag, not just one hardcoded ID
 const TAG_FAMILY = '36h11'
+const activeTagId = ref<number | null>(null)
 const STABILITY_WINDOW_MS = 2000
 const STABLE_THRESHOLD_M = 0.05
 const MODERATE_THRESHOLD_M = 0.15
@@ -151,10 +174,20 @@ let lastTfTime = 0
 // Canvas ref
 const historyCanvas = ref<HTMLCanvasElement | null>(null)
 
+// Sensor fusion state
+const fusionEvPos = ref(false)
+const fusionOpticalFlow = ref(false)
+const fusionRangeHeight = ref(false)
+const ekfAltitude = ref<string | null>(null)
+const visionRate = ref('--')
+const visionMsgTimes: number[] = []
+
 // Subscribers
 let tfSubscriber: ROSLIB.Topic | null = null
 let detectionSubscriber: ROSLIB.Topic | null = null
 let localPosSubscriber: ROSLIB.Topic | null = null
+let estimatorSubscriber: ROSLIB.Topic | null = null
+let visionOdomSubscriber: ROSLIB.Topic | null = null
 let updateInterval: number | null = null
 
 // Heading and position from PX4 (for NED calculation)
@@ -220,6 +253,26 @@ const handleLocalPositionMessage = (msg: any) => {
   droneY = msg.y || 0
   droneZ = msg.z || 0
   headingValid = true
+  // NED: z is negative when above ground
+  ekfAltitude.value = (-droneZ).toFixed(2)
+}
+
+// Handle estimator status flags
+const handleEstimatorFlags = (msg: any) => {
+  fusionEvPos.value = msg.cs_ev_pos || false
+  fusionOpticalFlow.value = msg.cs_opt_flow || false
+  fusionRangeHeight.value = msg.cs_rng_hgt || false
+}
+
+// Handle vision odometry messages (to track publish rate)
+const handleVisionOdom = (_msg: any) => {
+  const now = Date.now()
+  visionMsgTimes.push(now)
+  while (visionMsgTimes.length > 0 && visionMsgTimes[0] < now - 2000) {
+    visionMsgTimes.shift()
+  }
+  const rate = visionMsgTimes.length / 2
+  visionRate.value = `~${rate.toFixed(0)}Hz`
 }
 
 // Handle TF messages and compute NED position
@@ -230,7 +283,9 @@ const handleTfMessage = (msg: any) => {
     const childFrame = transform.child_frame_id
     if (childFrame && childFrame.includes(':')) {
       const [family, id] = childFrame.split(':')
-      if (family.includes(TAG_FAMILY) && parseInt(id) === TARGET_TAG_ID) {
+      const parsedId = parseInt(id)
+      if (family.includes(TAG_FAMILY) && !isNaN(parsedId)) {
+        activeTagId.value = parsedId
         const t = transform.transform.translation
         tfX.value = t.x.toFixed(3)
         tfY.value = t.y.toFixed(3)
@@ -299,7 +354,7 @@ const handleDetectionMessage = (msg: any) => {
   }
 
   for (const detection of msg.detections) {
-    if (detection.id === TARGET_TAG_ID) {
+    if (activeTagId.value === null || detection.id === activeTagId.value) {
       tagId.value = String(detection.id)
       tagFamily.value = detection.family || TAG_FAMILY
       decisionMargin.value = detection.decision_margin ? detection.decision_margin.toFixed(1) : '--'
@@ -481,7 +536,23 @@ const setupSubscriptions = () => {
   })
   localPosSubscriber.subscribe(handleLocalPositionMessage)
 
-  console.log('AprilTagVisualizer: Subscribed to /tf, /apriltag_detections, /fmu/out/vehicle_local_position')
+  // Subscribe to estimator status flags (for sensor fusion indicators)
+  estimatorSubscriber = new ROSLIB.Topic({
+    ros: props.ros,
+    name: '/fmu/out/estimator_status_flags',
+    messageType: 'px4_msgs/msg/EstimatorStatusFlags'
+  })
+  estimatorSubscriber.subscribe(handleEstimatorFlags)
+
+  // Subscribe to visual odometry (to track publish rate)
+  visionOdomSubscriber = new ROSLIB.Topic({
+    ros: props.ros,
+    name: '/fmu/in/vehicle_visual_odometry',
+    messageType: 'px4_msgs/msg/VehicleOdometry'
+  })
+  visionOdomSubscriber.subscribe(handleVisionOdom)
+
+  console.log('AprilTagVisualizer: Subscribed to /tf, /apriltag_detections, /fmu/out/vehicle_local_position, /fmu/out/estimator_status_flags, /fmu/in/vehicle_visual_odometry')
 }
 
 // Watch for ROS connection changes
@@ -502,6 +573,8 @@ onBeforeUnmount(() => {
   if (tfSubscriber) tfSubscriber.unsubscribe()
   if (detectionSubscriber) detectionSubscriber.unsubscribe()
   if (localPosSubscriber) localPosSubscriber.unsubscribe()
+  if (estimatorSubscriber) estimatorSubscriber.unsubscribe()
+  if (visionOdomSubscriber) visionOdomSubscriber.unsubscribe()
   if (updateInterval) clearInterval(updateInterval)
 })
 </script>
@@ -510,113 +583,92 @@ onBeforeUnmount(() => {
 .apriltag-visualizer {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-  padding: 1rem;
+  gap: 0.75rem;
+  padding: 0;
   background: #111827;
   color: #fff;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-.stability-section {
-  text-align: center;
-  padding: 1.5rem;
-  background: #1f2937;
-  border-radius: 0.5rem;
-}
-
-.stability-indicator {
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  margin: 0 auto 1rem;
+/* Compact stability bar */
+.stability-bar {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  font-weight: bold;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
   transition: all 0.3s;
 }
 
-.stability-no-tag {
-  background: #374151;
-  border: 3px solid #4b5563;
+.stability-bar.not-ready {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.stability-bar.caution {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.stability-bar.ready {
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+}
+
+.stability-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.stability-dot.stability-no-tag { background: #4b5563; }
+.stability-dot.stability-unstable { background: #ef4444; box-shadow: 0 0 6px rgba(239, 68, 68, 0.5); }
+.stability-dot.stability-moderate { background: #f59e0b; box-shadow: 0 0 6px rgba(245, 158, 11, 0.5); }
+.stability-dot.stability-stable { background: #22c55e; box-shadow: 0 0 6px rgba(34, 197, 94, 0.5); }
+
+.stability-bar-text {
+  font-weight: 700;
+  color: #e5e7eb;
+}
+
+.stability-bar-sep {
+  color: #4b5563;
+}
+
+.stability-bar-desc {
   color: #9ca3af;
-}
-
-.stability-unstable {
-  background: rgba(239, 68, 68, 0.2);
-  border: 3px solid #ef4444;
-  color: #ef4444;
-}
-
-.stability-moderate {
-  background: rgba(245, 158, 11, 0.2);
-  border: 3px solid #f59e0b;
-  color: #f59e0b;
-}
-
-.stability-stable {
-  background: rgba(34, 197, 94, 0.2);
-  border: 3px solid #22c55e;
-  color: #22c55e;
-}
-
-.stability-description {
-  font-size: 0.875rem;
-  color: #9ca3af;
-  margin-bottom: 1rem;
-}
-
-.ready-banner {
-  padding: 0.75rem 1rem;
-  border-radius: 0.375rem;
-  font-weight: bold;
-  font-size: 0.875rem;
-}
-
-.ready-banner.not-ready {
-  background: rgba(239, 68, 68, 0.2);
-  border: 2px solid #ef4444;
-  color: #ef4444;
-}
-
-.ready-banner.caution {
-  background: rgba(245, 158, 11, 0.2);
-  border: 2px solid #f59e0b;
-  color: #f59e0b;
-}
-
-.ready-banner.ready {
-  background: rgba(34, 197, 94, 0.2);
-  border: 2px solid #22c55e;
-  color: #22c55e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .data-section {
   background: #1f2937;
-  border-radius: 0.5rem;
-  padding: 1rem;
+  border-radius: 0.375rem;
+  padding: 0.625rem;
 }
 
 .section-title {
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   text-transform: uppercase;
   color: #6b7280;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
   border-bottom: 1px solid #374151;
-  padding-bottom: 0.5rem;
+  padding-bottom: 0.375rem;
 }
 
 .data-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 1rem;
+  gap: 0.5rem;
 }
 
 .data-item {
   text-align: center;
   background: #374151;
-  padding: 0.75rem;
+  padding: 0.5rem;
   border-radius: 0.375rem;
 }
 
@@ -629,7 +681,7 @@ onBeforeUnmount(() => {
 
 .data-value {
   display: block;
-  font-size: 1.25rem;
+  font-size: 1.0625rem;
   font-weight: bold;
   font-family: 'SF Mono', Monaco, monospace;
 }
@@ -648,14 +700,14 @@ onBeforeUnmount(() => {
 
 .quality-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 0.75rem;
-  margin-bottom: 1rem;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.375rem;
+  margin-bottom: 0.5rem;
 }
 
 .quality-item {
   background: #374151;
-  padding: 0.5rem 0.75rem;
+  padding: 0.375rem 0.5rem;
   border-radius: 0.375rem;
 }
 
@@ -690,7 +742,7 @@ onBeforeUnmount(() => {
 
 .history-canvas {
   width: 100%;
-  height: 120px;
+  height: 80px;
   background: #1f2937;
   border-radius: 0.375rem;
 }
@@ -718,4 +770,81 @@ onBeforeUnmount(() => {
 .legend-item.north::before { background: #ef4444; }
 .legend-item.east::before { background: #22c55e; }
 .legend-item.down::before { background: #3b82f6; }
+
+.fusion-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.375rem;
+}
+
+.fusion-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.375rem 0.625rem;
+  border-radius: 0.375rem;
+  transition: all 0.3s;
+}
+
+.fusion-item.active {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.fusion-item.inactive {
+  background: #374151;
+  border: 1px solid #4b5563;
+}
+
+.fusion-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: all 0.3s;
+}
+
+.fusion-indicator.on {
+  background: #22c55e;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
+}
+
+.fusion-indicator.off {
+  background: #4b5563;
+}
+
+.fusion-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #e5e7eb;
+}
+
+.fusion-detail {
+  display: block;
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.fusion-altitude {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.375rem;
+  padding: 0.375rem 0.625rem;
+  background: #374151;
+  border-radius: 0.375rem;
+}
+
+.fusion-alt-label {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.fusion-alt-value {
+  font-size: 1.125rem;
+  font-weight: bold;
+  font-family: 'SF Mono', Monaco, monospace;
+  color: #3b82f6;
+}
 </style>
