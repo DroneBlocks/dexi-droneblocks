@@ -7,7 +7,8 @@ export default defineNuxtConfig({
     anthropicApiKey: process.env.ANTHROPIC_API_KEY,
     chatLogUrl: process.env.CHAT_LOG_URL,
     public: {
-      simUrl: process.env.NUXT_PUBLIC_SIM_URL || ''
+      simUrl: process.env.NUXT_PUBLIC_SIM_URL || '',
+      rosbridgeUrl: process.env.NUXT_PUBLIC_ROSBRIDGE_URL || ''
     }
   },
   postcss: {
