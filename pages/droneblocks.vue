@@ -125,7 +125,7 @@ const unityUrl = ref('');
 if (process.client) {
   const hostname = window.location.hostname;
   const port = window.location.port;
-  unityUrl.value = `http://${hostname}:1337`;
+  unityUrl.value = useRuntimeConfig().public.simUrl || `http://${hostname}:1337`;
   scanPageUrl.value = `${window.location.protocol}//${hostname}${port ? ':' + port : ''}/scan`;
 }
 

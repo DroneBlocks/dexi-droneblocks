@@ -159,7 +159,7 @@ if (process.client) {
     // Fallback to current hostname with matching protocol
     const hostname = window.location.hostname
     const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:'
-    unityUrl.value = `${protocol}//${hostname}:1337`
+    unityUrl.value = useRuntimeConfig().public.simUrl || `${protocol}//${hostname}:1337`
   }
 }
 
