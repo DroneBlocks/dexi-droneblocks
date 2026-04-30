@@ -6,11 +6,16 @@ export const useROS = () => {
     if (rosHost) {
       return `ws://${rosHost}:9090`
     }
+    // Branded tunnel deployments inject NUXT_PUBLIC_ROSBRIDGE_URL pointing at
+    // a dedicated rosbridge subdomain. Use it when set; fall back to legacy
+    // same-host logic for hardware (raw IP) and local dev.
+    const configured = useRuntimeConfig().public.rosbridgeUrl
+    if (configured) {
+      return configured
+    }
     const hostname = window.location.hostname
     const isSecure = window.location.protocol === 'https:'
     const protocol = isSecure ? 'wss:' : 'ws:'
-    // Over HTTPS (e.g. Cloudflare tunnel), route through nginx reverse proxy
-    // Over HTTP (local network), connect directly to rosbridge port
     const target = isSecure ? '/rosbridge' : ':9090'
     return `${protocol}//${hostname}${target}`
   }
