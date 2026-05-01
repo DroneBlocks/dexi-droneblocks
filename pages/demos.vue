@@ -213,8 +213,11 @@ function launchDemo(demo: Demo) {
 }
 
 function launchPythonMission(mission: PythonMission) {
-  // Open code-server in a new tab with the folder and file
-  const url = `http://${hostname}:9999/?folder=${encodeURIComponent(mission.folder)}&file=${encodeURIComponent(mission.file)}`;
+  // Open code-server in a new tab with the folder and file. Branded
+  // tunnel deployments inject NUXT_PUBLIC_VSCODE_URL; hardware/local dev
+  // fall back to http://hostname:9999.
+  const baseUrl = useRuntimeConfig().public.vscodeUrl || `http://${hostname}:9999`;
+  const url = `${baseUrl}/?folder=${encodeURIComponent(mission.folder)}&file=${encodeURIComponent(mission.file)}`;
   window.open(url, '_blank');
 }
 </script>

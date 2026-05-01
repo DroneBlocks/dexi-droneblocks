@@ -91,7 +91,7 @@
 
         <!-- VS Code Server -->
         <NuxtLink
-          :to="`http://${hostname}:9999`"
+          :to="vscodeUrl"
           target="_blank"
           class="group card"
         >
@@ -218,6 +218,7 @@
 <script setup>
 const hostname = process.client ? window.location.hostname : '192.168.4.1'
 const nodeRedUrl = useRuntimeConfig().public.nodeRedUrl || `http://${hostname}:1880`
+const vscodeUrl = useRuntimeConfig().public.vscodeUrl || `http://${hostname}:9999`
 </script>
 
 <style scoped>
