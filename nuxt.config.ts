@@ -8,7 +8,8 @@ export default defineNuxtConfig({
     chatLogUrl: process.env.CHAT_LOG_URL,
     public: {
       simUrl: process.env.NUXT_PUBLIC_SIM_URL || '',
-      rosbridgeUrl: process.env.NUXT_PUBLIC_ROSBRIDGE_URL || ''
+      rosbridgeUrl: process.env.NUXT_PUBLIC_ROSBRIDGE_URL || '',
+      nodeRedUrl: process.env.NUXT_PUBLIC_NODE_RED_URL || ''
     }
   },
   postcss: {
