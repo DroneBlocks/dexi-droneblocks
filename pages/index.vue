@@ -73,7 +73,7 @@
 
         <!-- Node-RED -->
         <NuxtLink
-          :to="`http://${hostname}:1880`"
+          :to="nodeRedUrl"
           target="_blank"
           class="group card"
         >
@@ -217,6 +217,7 @@
 
 <script setup>
 const hostname = process.client ? window.location.hostname : '192.168.4.1'
+const nodeRedUrl = useRuntimeConfig().public.nodeRedUrl || `http://${hostname}:1880`
 </script>
 
 <style scoped>
