@@ -232,12 +232,17 @@ import { useROS } from '~/composables/useROS'
 
 const { getROSURL } = useROS()
 
-// Unity URL
+// Unity URL — append ?rosbridge=... so Unity's WebGL build connects to the
+// right rosbridge endpoint (Priority 1 in Unity's RosBridgeUrlHelper.jslib).
+// Without this, Unity falls back to wss://{iframe-hostname}:9090 which fails
+// on tunneled deployments.
 const unityUrl = ref('')
 if (process.client) {
   const hostname = window.location.hostname
   const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:'
-  unityUrl.value = useRuntimeConfig().public.simUrl || `${protocol}//${hostname}:1337`
+  const baseSimUrl = useRuntimeConfig().public.simUrl || `${protocol}//${hostname}:1337`
+  const rosbridgeUrl = useRuntimeConfig().public.rosbridgeUrl || `ws://${hostname}:9090`
+  unityUrl.value = `${baseSimUrl}?rosbridge=${encodeURIComponent(rosbridgeUrl)}`
 }
 
 // Split panel state

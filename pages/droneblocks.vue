@@ -120,12 +120,20 @@ const nedEast = ref<number>(0);
 const nedDown = ref<number>(0);
 const nedHeading = ref<number>(0);
 
-// Unity simulator URL - use current hostname
+// Unity simulator URL - use current hostname.
+// Append ?rosbridge=... so the Unity WebGL build connects to the right
+// rosbridge endpoint via its query-param Priority 1 path
+// (Assets/Plugins/WebGL/RosBridgeUrlHelper.jslib in the Unity project).
+// Without this, Unity falls back to constructing wss://{iframe-hostname}:9090,
+// which fails on tunneled deployments because Cloudflare doesn't proxy 9090
+// on the sim-* subdomain.
 const unityUrl = ref('');
 if (process.client) {
   const hostname = window.location.hostname;
   const port = window.location.port;
-  unityUrl.value = useRuntimeConfig().public.simUrl || `http://${hostname}:1337`;
+  const baseSimUrl = useRuntimeConfig().public.simUrl || `http://${hostname}:1337`;
+  const rosbridgeUrl = useRuntimeConfig().public.rosbridgeUrl || `ws://${hostname}:9090`;
+  unityUrl.value = `${baseSimUrl}?rosbridge=${encodeURIComponent(rosbridgeUrl)}`;
   scanPageUrl.value = `${window.location.protocol}//${hostname}${port ? ':' + port : ''}/scan`;
 }
 
