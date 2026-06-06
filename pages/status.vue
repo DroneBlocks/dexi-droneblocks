@@ -143,26 +143,45 @@
             </div>
           </div>
 
-          <!-- 5G / Cellular -->
-          <div class="status-card">
-            <h2 class="status-card-title">Cellular</h2>
-            <div v-if="cellularInterface" class="space-y-3">
-              <div class="flex items-center gap-2 mb-1">
-                <span class="inline-block w-2 h-2 rounded-full bg-green-500" />
-                <span class="text-sm text-green-700 font-medium">Connected</span>
-              </div>
-              <div class="status-row">
-                <span class="status-label">Interface</span>
-                <span class="status-value font-mono">{{ cellularInterface.name }}</span>
-              </div>
-              <div v-if="cellularInterface.ip" class="status-row">
-                <span class="status-label">IP</span>
-                <span class="status-value font-mono">{{ cellularInterface.ip }}</span>
+          <!-- Top Processes -->
+          <div v-if="status!.topProcesses?.length" class="status-card">
+            <h2 class="status-card-title">Top Processes</h2>
+            <div class="space-y-1.5">
+              <div
+                v-for="p in status!.topProcesses"
+                :key="p.pid"
+                class="flex items-center gap-2 text-xs"
+              >
+                <span
+                  class="font-mono w-12 text-right"
+                  :class="{
+                    'text-red-600': p.cpuPct >= 50,
+                    'text-amber-600': p.cpuPct >= 20 && p.cpuPct < 50,
+                    'text-slate-700': p.cpuPct < 20
+                  }"
+                >{{ p.cpuPct.toFixed(1) }}%</span>
+                <span class="font-mono truncate flex-1" :title="p.command">{{ p.command }}</span>
+                <span class="font-mono text-slate-400 w-12 text-right text-[10px]">{{ p.pid }}</span>
               </div>
             </div>
-            <div v-else class="flex items-center gap-2">
-              <span class="inline-block w-2 h-2 rounded-full bg-slate-300" />
-              <span class="text-sm text-slate-400">No modem detected</span>
+          </div>
+        </div>
+
+        <!-- Cellular (only when a modem is present) -->
+        <div v-if="cellularInterface" class="status-card mb-6">
+          <h2 class="status-card-title">Cellular</h2>
+          <div class="space-y-3">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="inline-block w-2 h-2 rounded-full bg-green-500" />
+              <span class="text-sm text-green-700 font-medium">Connected</span>
+            </div>
+            <div class="status-row">
+              <span class="status-label">Interface</span>
+              <span class="status-value font-mono">{{ cellularInterface.name }}</span>
+            </div>
+            <div v-if="cellularInterface.ip" class="status-row">
+              <span class="status-label">IP</span>
+              <span class="status-value font-mono">{{ cellularInterface.ip }}</span>
             </div>
           </div>
         </div>
@@ -344,6 +363,7 @@ interface SystemStatus {
   cpuTempC: number | null;
   cpuUsagePct: number | null;
   cpuPerCore: number[] | null;
+  topProcesses: { pid: number; cpuPct: number; command: string }[] | null;
   interfaces: NetworkInterface[];
   savedConnections: SavedConnection[];
   wifiMode: "hotspot" | "client" | "disconnected";

@@ -201,6 +201,38 @@ async function getCpuStats(): Promise<CpuStats> {
   }
 }
 
+// Top N processes by CPU% — uses `top -bn2 -d 0.5`, second iteration gives a
+// real sample window (first iteration's %CPU is cumulative-since-start, useless).
+interface TopProcess { pid: number; cpuPct: number; command: string }
+async function getTopProcesses(limit = 5): Promise<TopProcess[] | null> {
+  const raw = await run("top -bn2 -d 0.5 -w512 -o %CPU 2>/dev/null");
+  if (!raw) return null;
+  // Find the SECOND "PID  USER ..." header — its block is the real sample.
+  const lines = raw.split("\n");
+  let pidHdrCount = 0;
+  let bodyStart = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^\s*PID\s+USER/.test(lines[i])) {
+      pidHdrCount++;
+      if (pidHdrCount === 2) { bodyStart = i + 1; break; }
+    }
+  }
+  if (bodyStart < 0) return null;
+  const out: TopProcess[] = [];
+  for (let i = bodyStart; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) break;
+    const parts = line.split(/\s+/);
+    if (parts.length < 12) continue;
+    const pid = Number(parts[0]);
+    const cpuPct = Number(parts[8]); // %CPU column in `top` BATCH output
+    if (!Number.isFinite(pid) || !Number.isFinite(cpuPct)) continue;
+    if (cpuPct < 0.1) continue;
+    out.push({ pid, cpuPct, command: parts.slice(11).join(" ") });
+  }
+  return out.sort((a, b) => b.cpuPct - a.cpuPct).slice(0, limit);
+}
+
 async function getWifiMode(): Promise<"hotspot" | "client" | "disconnected"> {
   const activeRaw = await run(
     "nmcli -t -f NAME,TYPE connection show --active 2>/dev/null"
@@ -213,7 +245,7 @@ async function getWifiMode(): Promise<"hotspot" | "client" | "disconnected"> {
 }
 
 export default defineEventHandler(async () => {
-  const [hostname, uptimeRaw, memRaw, tempRaw, model, interfaces, savedConnections, wifiMode, cpu] =
+  const [hostname, uptimeRaw, memRaw, tempRaw, model, interfaces, savedConnections, wifiMode, cpu, topProcesses] =
     await Promise.all([
       run("hostname"),
       readProc("/proc/uptime"),
@@ -224,6 +256,7 @@ export default defineEventHandler(async () => {
       getSavedConnections(),
       getWifiMode(),
       getCpuStats(),
+      getTopProcesses(5),
     ]);
 
   // Parse uptime from seconds
@@ -251,6 +284,7 @@ export default defineEventHandler(async () => {
     cpuTempC,
     cpuUsagePct: cpu.aggregate,
     cpuPerCore: cpu.perCore,
+    topProcesses,
     interfaces,
     savedConnections,
     wifiMode,
