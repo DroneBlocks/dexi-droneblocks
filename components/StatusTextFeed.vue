@@ -6,16 +6,14 @@
 //      click to expand into a scrollable list. Hidden by default so it
 //      doesn't compete with the camera/map view.
 
-import { computed, ref, watch } from 'vue'
-import { useTelemetry, type StatusText } from '~/composables/useTelemetry'
+import { ref, watch } from 'vue'
+import type { StatusText } from '~/composables/useTelemetry'
+import { useStatusLog } from '~/composables/useStatusLog'
 
-const { telemetry } = useTelemetry()
+const { items, latest, logOpen, openLog, closeLog } = useStatusLog()
 
 const TOAST_LIFETIME_MS = 5000
 const TOAST_FADE_MS = 400
-
-const items = computed(() => telemetry.value.statusTexts)
-const latest = computed<StatusText | null>(() => items.value[0] ?? null)
 
 // ---- Toast on new message -------------------------------------------------
 const toastEntry = ref<StatusText | null>(null)
@@ -37,17 +35,6 @@ watch(latest, (val) => {
     fadeTimer = setTimeout(() => { toastEntry.value = null }, TOAST_FADE_MS)
   }, TOAST_LIFETIME_MS)
 }, { flush: 'post' })
-
-// ---- Log panel ------------------------------------------------------------
-const logOpen = ref(false)
-const lastSeenIndex = ref(0)
-const unseenCount = computed(() => Math.max(0, items.value.length - lastSeenIndex.value))
-
-const openLog = () => {
-  logOpen.value = true
-  lastSeenIndex.value = items.value.length
-}
-const closeLog = () => { logOpen.value = false }
 
 // ---- Helpers --------------------------------------------------------------
 const fmtTime = (ts: number) => {
@@ -87,20 +74,7 @@ const sevLabel = (s: number) => {
       </div>
     </Transition>
 
-    <!-- Persistent chip in bottom-right; click to open log panel -->
-    <button
-      v-if="items.length > 0 && !logOpen"
-      class="msg-chip"
-      :class="{ 'has-unseen': unseenCount > 0 }"
-      @click="openLog"
-      :title="`${items.length} message${items.length === 1 ? '' : 's'} — click to view`"
-    >
-      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 3h12v8H5l-3 3V3zm2 2v2h8V5H4zm0 3v2h6V8H4z" /></svg>
-      <span class="chip-count">{{ items.length }}</span>
-      <span v-if="unseenCount > 0" class="chip-badge">{{ unseenCount }}</span>
-    </button>
-
-    <!-- Log panel overlay -->
+    <!-- Log panel overlay (opened via MSG pill in the readiness strip) -->
     <Transition name="panel">
       <div v-if="logOpen" class="msg-panel">
         <div class="panel-header">
@@ -170,38 +144,6 @@ const sevLabel = (s: number) => {
 .toast-enter-from, .toast-leave-to {
   opacity: 0;
   transform: translate(-50%, -10px);
-}
-
-/* ---- Persistent chip --------------------------------------------------- */
-.msg-chip {
-  position: fixed;
-  bottom: 1rem;
-  right: 1rem;
-  z-index: 55;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.4rem 0.75rem;
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.85);
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  color: rgb(226 232 240);
-  font-family: ui-monospace, monospace;
-  font-size: 0.72rem;
-  cursor: pointer;
-  backdrop-filter: blur(8px);
-  transition: filter 0.12s ease;
-}
-.msg-chip:hover { filter: brightness(1.3); }
-.msg-chip svg { width: 14px; height: 14px; }
-.chip-count { font-weight: 600; }
-.chip-badge {
-  background: rgb(239 68 68);
-  color: white;
-  font-weight: 700;
-  border-radius: 999px;
-  padding: 0.05rem 0.4rem;
-  font-size: 0.65rem;
 }
 
 /* ---- Log panel --------------------------------------------------------- */

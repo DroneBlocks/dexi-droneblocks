@@ -8,11 +8,13 @@
 import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { useTelemetry } from '~/composables/useTelemetry'
 import { useMavlinkCommand } from '~/composables/useMavlinkCommand'
+import { useStatusLog } from '~/composables/useStatusLog'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
 const { telemetry, perCellVoltage, ageMs } = useTelemetry()
 const { arm, disarm, setMode } = useMavlinkCommand()
+const { totalCount: msgTotal, unseenCount: msgUnseen, latest: msgLatest, toggleLog } = useStatusLog()
 
 const visible = computed(() => route.path !== '/' && route.path !== '/index')
 const fmt = (n: number | null, d = 1) => (n == null || !Number.isFinite(n) ? '—' : n.toFixed(d))
@@ -117,6 +119,20 @@ const heading = computed<{ state: PillState; label: string }>(() => {
   return { state: 'green', label: `${Math.round(t.heading)}°` }
 })
 
+// Messages pill — severity of latest message drives the color, unseen count
+// drives the value. Click toggles the log panel.
+const msgPill = computed<{ state: PillState; label: string }>(() => {
+  if (msgTotal.value === 0) return { state: 'gray', label: '0' }
+  const sev = msgLatest.value?.severity ?? 6
+  let state: PillState = 'gray'
+  if (sev <= 3) state = 'red'
+  else if (sev === 4) state = 'amber'
+  else if (sev === 5) state = 'green'
+  else state = 'gray'
+  const label = msgUnseen.value > 0 ? `${msgUnseen.value} new` : String(msgTotal.value)
+  return { state, label }
+})
+
 // ---- Mode dropdown --------------------------------------------------------
 const modeMenuOpen = ref(false)
 const modeMenuEl = ref<HTMLElement | null>(null)
@@ -183,6 +199,15 @@ onBeforeUnmount(() => {
 <template>
   <div v-if="visible" class="readiness-strip">
     <div class="rs-inner">
+      <!-- Messages pill (left of MODE) -->
+      <Pill
+        label="MSG"
+        :state="msgPill.state"
+        :value="msgPill.label"
+        clickable
+        @click="toggleLog"
+      />
+
       <!-- Mode pill + dropdown (also reflects FC link state when offline) -->
       <div ref="modeMenuEl" class="rs-anchor">
         <Pill
