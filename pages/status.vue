@@ -45,9 +45,9 @@
                 <span class="status-label">Hostname</span>
                 <span class="status-value font-mono">{{ status!.hostname }}</span>
               </div>
-              <div v-if="status!.model" class="status-row">
+              <div v-if="status!.model" class="flex flex-col gap-1">
                 <span class="status-label">Model</span>
-                <span class="status-value font-mono text-xs">{{ status!.model }}</span>
+                <span class="status-value font-mono text-xs break-words leading-snug">{{ status!.model }}</span>
               </div>
               <div class="status-row">
                 <span class="status-label">Uptime</span>
