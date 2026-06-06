@@ -160,25 +160,44 @@ async function getSavedConnections(): Promise<SavedConnection[]> {
   return connections;
 }
 
-// /proc/stat aggregate CPU usage. Reads twice with a short delay and computes
-// the idle-time delta ratio. Same sampling pattern as `top` / `vmstat`.
-async function getCpuUsagePct(): Promise<number | null> {
+// /proc/stat CPU usage — aggregate + per-core. Reads twice with a short delay
+// and computes the idle-time delta ratio per cpu line. First "cpu " line is
+// aggregate; "cpu0..cpuN" follow. Same sampling pattern as `top` / `vmstat`.
+interface CpuStats {
+  aggregate: number | null;
+  perCore: number[] | null;
+}
+async function getCpuStats(): Promise<CpuStats> {
   const read = async () => {
-    const raw = (await readFile("/proc/stat", "utf-8")).split("\n")[0];
-    const fields = raw.split(/\s+/).slice(1).map(Number);
-    const total = fields.reduce((a, b) => a + b, 0);
-    const idle = fields[3] + (fields[4] || 0); // idle + iowait
-    return { total, idle };
+    const lines = (await readFile("/proc/stat", "utf-8"))
+      .split("\n")
+      .filter((l) => l.startsWith("cpu"));
+    return lines.map((l) => {
+      const fields = l.split(/\s+/).slice(1).map(Number);
+      const total = fields.reduce((a, b) => a + b, 0);
+      const idle = fields[3] + (fields[4] || 0); // idle + iowait
+      return { total, idle };
+    });
+  };
+  const usagePct = (
+    before: { total: number; idle: number },
+    after: { total: number; idle: number }
+  ) => {
+    const dTotal = after.total - before.total;
+    const dIdle = after.idle - before.idle;
+    return dTotal > 0 ? Math.max(0, Math.min(100, 100 * (1 - dIdle / dTotal))) : 0;
   };
   try {
     const a = await read();
     await new Promise((r) => setTimeout(r, 100));
     const b = await read();
-    const dTotal = b.total - a.total;
-    const dIdle = b.idle - a.idle;
-    return dTotal > 0 ? Math.max(0, Math.min(100, 100 * (1 - dIdle / dTotal))) : null;
+    if (a.length === 0 || a.length !== b.length) return { aggregate: null, perCore: null };
+    return {
+      aggregate: usagePct(a[0], b[0]),
+      perCore: a.slice(1).map((ac, i) => usagePct(ac, b[i + 1])),
+    };
   } catch {
-    return null;
+    return { aggregate: null, perCore: null };
   }
 }
 
@@ -194,7 +213,7 @@ async function getWifiMode(): Promise<"hotspot" | "client" | "disconnected"> {
 }
 
 export default defineEventHandler(async () => {
-  const [hostname, uptimeRaw, memRaw, tempRaw, model, interfaces, savedConnections, wifiMode, cpuUsagePct] =
+  const [hostname, uptimeRaw, memRaw, tempRaw, model, interfaces, savedConnections, wifiMode, cpu] =
     await Promise.all([
       run("hostname"),
       readProc("/proc/uptime"),
@@ -204,7 +223,7 @@ export default defineEventHandler(async () => {
       getNetworkInterfaces(),
       getSavedConnections(),
       getWifiMode(),
-      getCpuUsagePct(),
+      getCpuStats(),
     ]);
 
   // Parse uptime from seconds
@@ -230,7 +249,8 @@ export default defineEventHandler(async () => {
     uptime,
     memory,
     cpuTempC,
-    cpuUsagePct,
+    cpuUsagePct: cpu.aggregate,
+    cpuPerCore: cpu.perCore,
     interfaces,
     savedConnections,
     wifiMode,

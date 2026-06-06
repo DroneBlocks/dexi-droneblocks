@@ -90,6 +90,27 @@
                   />
                 </div>
               </div>
+              <div v-if="status!.cpuPerCore?.length" class="mt-3 space-y-1.5">
+                <div
+                  v-for="(pct, i) in status!.cpuPerCore"
+                  :key="i"
+                  class="flex items-center gap-2 text-xs"
+                >
+                  <span class="text-slate-400 font-mono w-9">cpu{{ i }}</span>
+                  <div class="flex-1 bg-slate-200 rounded h-1.5">
+                    <div
+                      class="h-1.5 rounded transition-all duration-500"
+                      :class="{
+                        'bg-green-500': pct < 70,
+                        'bg-amber-500': pct >= 70 && pct < 90,
+                        'bg-red-500': pct >= 90
+                      }"
+                      :style="{ width: pct + '%' }"
+                    />
+                  </div>
+                  <span class="text-slate-500 font-mono w-9 text-right">{{ Math.round(pct) }}%</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -322,6 +343,7 @@ interface SystemStatus {
   memory: { totalMb: number; usedMb: number; freeMb: number } | null;
   cpuTempC: number | null;
   cpuUsagePct: number | null;
+  cpuPerCore: number[] | null;
   interfaces: NetworkInterface[];
   savedConnections: SavedConnection[];
   wifiMode: "hotspot" | "client" | "disconnected";
