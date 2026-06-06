@@ -9,6 +9,7 @@
     <div class="flex-1 min-h-0">
       <GCSLayout :flight-controls-ref="flightControlsRef" />
     </div>
+    <StatusTextFeed class="shrink-0 m-2" />
   </div>
 </template>
 
