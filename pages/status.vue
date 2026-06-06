@@ -34,8 +34,8 @@
       </div>
 
       <template v-else>
-        <!-- Top row: System + Memory -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+        <!-- Top row: System + CPU + Memory + Cellular -->
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-6">
 
           <!-- System -->
           <div class="status-card">
@@ -45,16 +45,23 @@
                 <span class="status-label">Hostname</span>
                 <span class="status-value font-mono">{{ status!.hostname }}</span>
               </div>
-              <div v-if="status!.model" class="status-row">
+              <div v-if="status!.model" class="flex flex-col gap-1">
                 <span class="status-label">Model</span>
-                <span class="status-value font-mono text-xs">{{ status!.model }}</span>
+                <span class="status-value font-mono text-xs break-words leading-snug">{{ status!.model }}</span>
               </div>
               <div class="status-row">
                 <span class="status-label">Uptime</span>
                 <span class="status-value">{{ status!.uptime || 'N/A' }}</span>
               </div>
+            </div>
+          </div>
+
+          <!-- CPU -->
+          <div class="status-card">
+            <h2 class="status-card-title">CPU</h2>
+            <div class="space-y-3">
               <div v-if="status!.cpuTempC != null" class="status-row">
-                <span class="status-label">CPU Temp</span>
+                <span class="status-label">Temperature</span>
                 <span
                   class="status-value"
                   :class="{
@@ -65,6 +72,44 @@
                 >
                   {{ status!.cpuTempC!.toFixed(1) }} °C
                 </span>
+              </div>
+              <div v-if="status!.cpuUsagePct != null" class="status-row">
+                <span class="status-label">Load</span>
+                <span class="status-value">{{ cpuPercent }}%</span>
+              </div>
+              <div v-if="status!.cpuUsagePct != null" class="mt-3">
+                <div class="w-full bg-slate-200 rounded-full h-2">
+                  <div
+                    class="h-2 rounded-full transition-all duration-500"
+                    :class="{
+                      'bg-green-500': cpuPercent < 70,
+                      'bg-amber-500': cpuPercent >= 70 && cpuPercent < 90,
+                      'bg-red-500': cpuPercent >= 90
+                    }"
+                    :style="{ width: cpuPercent + '%' }"
+                  />
+                </div>
+              </div>
+              <div v-if="status!.cpuPerCore?.length" class="mt-3 space-y-1.5">
+                <div
+                  v-for="(pct, i) in status!.cpuPerCore"
+                  :key="i"
+                  class="flex items-center gap-2 text-xs"
+                >
+                  <span class="text-slate-400 font-mono w-9">cpu{{ i }}</span>
+                  <div class="flex-1 bg-slate-200 rounded h-1.5">
+                    <div
+                      class="h-1.5 rounded transition-all duration-500"
+                      :class="{
+                        'bg-green-500': pct < 70,
+                        'bg-amber-500': pct >= 70 && pct < 90,
+                        'bg-red-500': pct >= 90
+                      }"
+                      :style="{ width: pct + '%' }"
+                    />
+                  </div>
+                  <span class="text-slate-500 font-mono w-9 text-right">{{ Math.round(pct) }}%</span>
+                </div>
               </div>
             </div>
           </div>
@@ -98,49 +143,92 @@
             </div>
           </div>
 
-          <!-- 5G / Cellular -->
-          <div class="status-card">
-            <h2 class="status-card-title">Cellular</h2>
-            <div v-if="cellularInterface" class="space-y-3">
-              <div class="flex items-center gap-2 mb-1">
-                <span class="inline-block w-2 h-2 rounded-full bg-green-500" />
-                <span class="text-sm text-green-700 font-medium">Connected</span>
-              </div>
-              <div class="status-row">
-                <span class="status-label">Interface</span>
-                <span class="status-value font-mono">{{ cellularInterface.name }}</span>
-              </div>
-              <div v-if="cellularInterface.ip" class="status-row">
-                <span class="status-label">IP</span>
-                <span class="status-value font-mono">{{ cellularInterface.ip }}</span>
+          <!-- Top Processes -->
+          <div v-if="status!.topProcesses?.length" class="status-card">
+            <h2 class="status-card-title">Top Processes</h2>
+            <div class="space-y-1.5">
+              <div
+                v-for="p in status!.topProcesses"
+                :key="p.pid"
+                class="flex items-center gap-2 text-xs"
+              >
+                <span
+                  class="font-mono w-12 text-right"
+                  :class="{
+                    'text-red-600': p.cpuPct >= 50,
+                    'text-amber-600': p.cpuPct >= 20 && p.cpuPct < 50,
+                    'text-slate-700': p.cpuPct < 20
+                  }"
+                >{{ p.cpuPct.toFixed(1) }}%</span>
+                <span class="font-mono truncate flex-1" :title="p.command">{{ p.command }}</span>
+                <span class="font-mono text-slate-400 w-12 text-right text-[10px]">{{ p.pid }}</span>
               </div>
             </div>
-            <div v-else class="flex items-center gap-2">
-              <span class="inline-block w-2 h-2 rounded-full bg-slate-300" />
-              <span class="text-sm text-slate-400">No modem detected</span>
+          </div>
+        </div>
+
+        <!-- Cellular (only when a modem is present) -->
+        <div v-if="cellularInterface" class="status-card mb-6">
+          <h2 class="status-card-title">Cellular</h2>
+          <div class="space-y-3">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="inline-block w-2 h-2 rounded-full bg-green-500" />
+              <span class="text-sm text-green-700 font-medium">Connected</span>
+            </div>
+            <div class="status-row">
+              <span class="status-label">Interface</span>
+              <span class="status-value font-mono">{{ cellularInterface.name }}</span>
+            </div>
+            <div v-if="cellularInterface.ip" class="status-row">
+              <span class="status-label">IP</span>
+              <span class="status-value font-mono">{{ cellularInterface.ip }}</span>
             </div>
           </div>
         </div>
 
         <!-- WiFi Mode Section -->
         <div class="status-card mb-6">
-          <div class="flex items-center justify-between mb-4">
-            <h2 class="status-card-title mb-0">WiFi Mode</h2>
-            <div class="flex items-center bg-slate-100 rounded-lg p-1">
+          <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <div class="flex items-center gap-3">
+              <h2 class="status-card-title mb-0">WiFi Mode</h2>
+              <span
+                class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+                :class="{
+                  'bg-amber-100 text-amber-800': status!.wifiMode === 'hotspot',
+                  'bg-blue-100 text-blue-800': status!.wifiMode === 'client',
+                  'bg-slate-200 text-slate-600': status!.wifiMode === 'disconnected'
+                }"
+              >
+                <span class="inline-block w-1.5 h-1.5 rounded-full"
+                  :class="{
+                    'bg-amber-500': status!.wifiMode === 'hotspot',
+                    'bg-blue-500': status!.wifiMode === 'client',
+                    'bg-slate-400': status!.wifiMode === 'disconnected'
+                  }"
+                />
+                Current:
+                {{
+                  status!.wifiMode === 'hotspot' ? 'Hotspot'
+                  : status!.wifiMode === 'client' ? 'Client'
+                  : 'Disconnected'
+                }}
+              </span>
+            </div>
+            <div class="flex items-center gap-2">
               <button
-                class="mode-btn"
-                :class="status!.wifiMode === 'hotspot' ? 'mode-btn-active' : ''"
+                v-if="status!.wifiMode !== 'hotspot'"
+                class="btn btn-sm btn-outline btn-warning"
                 :disabled="switching"
                 @click="switchToHotspot"
               >
-                Hotspot
+                📡 Switch to Hotspot
               </button>
               <button
-                class="mode-btn"
-                :class="status!.wifiMode === 'client' ? 'mode-btn-active' : ''"
-                :disabled="switching || !hasClientNetworks"
+                v-if="status!.wifiMode !== 'client' && hasClientNetworks"
+                class="btn btn-sm btn-outline btn-info"
+                :disabled="switching"
               >
-                Client
+                📶 Switch to Client
               </button>
             </div>
           </div>
@@ -297,6 +385,9 @@ interface SystemStatus {
   uptime: string;
   memory: { totalMb: number; usedMb: number; freeMb: number } | null;
   cpuTempC: number | null;
+  cpuUsagePct: number | null;
+  cpuPerCore: number[] | null;
+  topProcesses: { pid: number; cpuPct: number; command: string }[] | null;
   interfaces: NetworkInterface[];
   savedConnections: SavedConnection[];
   wifiMode: "hotspot" | "client" | "disconnected";
@@ -315,6 +406,11 @@ const memPercent = computed(() => {
   return Math.round(
     (status.value.memory.usedMb / status.value.memory.totalMb) * 100
   );
+});
+
+const cpuPercent = computed(() => {
+  const v = status.value?.cpuUsagePct;
+  return v == null ? 0 : Math.round(v);
 });
 
 const wifiInterface = computed(() =>

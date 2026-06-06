@@ -160,6 +160,79 @@ async function getSavedConnections(): Promise<SavedConnection[]> {
   return connections;
 }
 
+// /proc/stat CPU usage — aggregate + per-core. Reads twice with a short delay
+// and computes the idle-time delta ratio per cpu line. First "cpu " line is
+// aggregate; "cpu0..cpuN" follow. Same sampling pattern as `top` / `vmstat`.
+interface CpuStats {
+  aggregate: number | null;
+  perCore: number[] | null;
+}
+async function getCpuStats(): Promise<CpuStats> {
+  const read = async () => {
+    const lines = (await readFile("/proc/stat", "utf-8"))
+      .split("\n")
+      .filter((l) => l.startsWith("cpu"));
+    return lines.map((l) => {
+      const fields = l.split(/\s+/).slice(1).map(Number);
+      const total = fields.reduce((a, b) => a + b, 0);
+      const idle = fields[3] + (fields[4] || 0); // idle + iowait
+      return { total, idle };
+    });
+  };
+  const usagePct = (
+    before: { total: number; idle: number },
+    after: { total: number; idle: number }
+  ) => {
+    const dTotal = after.total - before.total;
+    const dIdle = after.idle - before.idle;
+    return dTotal > 0 ? Math.max(0, Math.min(100, 100 * (1 - dIdle / dTotal))) : 0;
+  };
+  try {
+    const a = await read();
+    await new Promise((r) => setTimeout(r, 100));
+    const b = await read();
+    if (a.length === 0 || a.length !== b.length) return { aggregate: null, perCore: null };
+    return {
+      aggregate: usagePct(a[0], b[0]),
+      perCore: a.slice(1).map((ac, i) => usagePct(ac, b[i + 1])),
+    };
+  } catch {
+    return { aggregate: null, perCore: null };
+  }
+}
+
+// Top N processes by CPU% — uses `top -bn2 -d 0.5`, second iteration gives a
+// real sample window (first iteration's %CPU is cumulative-since-start, useless).
+interface TopProcess { pid: number; cpuPct: number; command: string }
+async function getTopProcesses(limit = 5): Promise<TopProcess[] | null> {
+  const raw = await run("top -bn2 -d 0.5 -w512 -o %CPU 2>/dev/null");
+  if (!raw) return null;
+  // Find the SECOND "PID  USER ..." header — its block is the real sample.
+  const lines = raw.split("\n");
+  let pidHdrCount = 0;
+  let bodyStart = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^\s*PID\s+USER/.test(lines[i])) {
+      pidHdrCount++;
+      if (pidHdrCount === 2) { bodyStart = i + 1; break; }
+    }
+  }
+  if (bodyStart < 0) return null;
+  const out: TopProcess[] = [];
+  for (let i = bodyStart; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) break;
+    const parts = line.split(/\s+/);
+    if (parts.length < 12) continue;
+    const pid = Number(parts[0]);
+    const cpuPct = Number(parts[8]); // %CPU column in `top` BATCH output
+    if (!Number.isFinite(pid) || !Number.isFinite(cpuPct)) continue;
+    if (cpuPct < 0.1) continue;
+    out.push({ pid, cpuPct, command: parts.slice(11).join(" ") });
+  }
+  return out.sort((a, b) => b.cpuPct - a.cpuPct).slice(0, limit);
+}
+
 async function getWifiMode(): Promise<"hotspot" | "client" | "disconnected"> {
   const activeRaw = await run(
     "nmcli -t -f NAME,TYPE connection show --active 2>/dev/null"
@@ -172,7 +245,7 @@ async function getWifiMode(): Promise<"hotspot" | "client" | "disconnected"> {
 }
 
 export default defineEventHandler(async () => {
-  const [hostname, uptimeRaw, memRaw, tempRaw, model, interfaces, savedConnections, wifiMode] =
+  const [hostname, uptimeRaw, memRaw, tempRaw, model, interfaces, savedConnections, wifiMode, cpu, topProcesses] =
     await Promise.all([
       run("hostname"),
       readProc("/proc/uptime"),
@@ -182,6 +255,8 @@ export default defineEventHandler(async () => {
       getNetworkInterfaces(),
       getSavedConnections(),
       getWifiMode(),
+      getCpuStats(),
+      getTopProcesses(5),
     ]);
 
   // Parse uptime from seconds
@@ -207,6 +282,9 @@ export default defineEventHandler(async () => {
     uptime,
     memory,
     cpuTempC,
+    cpuUsagePct: cpu.aggregate,
+    cpuPerCore: cpu.perCore,
+    topProcesses,
     interfaces,
     savedConnections,
     wifiMode,
