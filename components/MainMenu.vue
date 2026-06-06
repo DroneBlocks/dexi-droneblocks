@@ -55,18 +55,6 @@
           >
             Keyboard Control
           </button>
-          <button
-            class="w-full text-left py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors"
-            @click="openGitHub"
-          >
-            GitHub
-          </button>
-          <button
-            class="w-full text-left py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors"
-            @click="openDiscord"
-          >
-            Discord
-          </button>
         </nav>
       </div>
     </div>
@@ -89,16 +77,6 @@ const isOpen = ref(false)
 const cameraInverted = ref(false) // Camera displays right-side up by default
 
 const { keyboardControlEnabled: keyboardControlAvailable } = useDexiPlatform()
-
-const openGitHub = () => {
-  window.open('https://github.com/droneblocks', '_blank')
-  isOpen.value = false
-}
-
-const openDiscord = () => {
-  window.open('https://discord.gg/Wjw7wGf7Wn', '_blank')
-  isOpen.value = false
-}
 
 const toggleCameraRotation = () => {
   cameraInverted.value = !cameraInverted.value
