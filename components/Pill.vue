@@ -2,20 +2,38 @@
 // Reusable status pill for ReadinessStrip + future status panels.
 // `label` is the static prefix ("FC", "Battery"); `value` is the live string.
 // `state` controls color: green / amber / red / gray.
+// When `clickable`, renders as a button with hover styles and emits `click`.
 
 defineProps<{
   label?: string
   value: string
   state: 'green' | 'amber' | 'red' | 'gray'
+  clickable?: boolean
+  active?: boolean
 }>()
+
+defineEmits<{ click: [event: MouseEvent] }>()
 </script>
 
 <template>
-  <span class="pill" :class="`pill-${state}`">
+  <component
+    :is="clickable ? 'button' : 'span'"
+    :type="clickable ? 'button' : undefined"
+    class="pill"
+    :class="[`pill-${state}`, { 'pill-clickable': clickable, 'pill-active': active }]"
+    @click="(e: MouseEvent) => clickable && $emit('click', e)"
+  >
     <span class="dot" />
     <span v-if="label" class="pill-label">{{ label }}</span>
     <span class="pill-value">{{ value }}</span>
-  </span>
+    <svg
+      v-if="clickable"
+      class="caret"
+      viewBox="0 0 12 12"
+      fill="currentColor"
+      aria-hidden="true"
+    ><path d="M2 4l4 4 4-4z" /></svg>
+  </component>
 </template>
 
 <style scoped>
@@ -30,6 +48,9 @@ defineProps<{
   line-height: 1;
   white-space: nowrap;
   border: 1px solid transparent;
+  font: inherit;
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
 }
 .dot {
   width: 6px;
@@ -38,16 +59,30 @@ defineProps<{
   flex-shrink: 0;
 }
 .pill-label {
-  color: rgb(148 163 184); /* slate-400 */
+  color: rgb(148 163 184);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   font-size: 0.65rem;
   font-weight: 600;
 }
 .pill-value {
-  color: rgb(241 245 249); /* slate-100 */
+  color: rgb(241 245 249);
   font-weight: 500;
 }
+.caret {
+  width: 9px;
+  height: 9px;
+  margin-left: 0.15rem;
+  color: rgb(148 163 184);
+}
+
+.pill-clickable {
+  cursor: pointer;
+  transition: filter 0.12s ease, transform 0.06s ease;
+}
+.pill-clickable:hover { filter: brightness(1.25); }
+.pill-clickable:active { transform: translateY(1px); }
+.pill-active { box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.5); }
 
 .pill-green { background: rgba(16, 185, 129, 0.12); border-color: rgba(16, 185, 129, 0.3); }
 .pill-green .dot { background: rgb(16 185 129); box-shadow: 0 0 0 2px rgba(16,185,129,0.2); }
