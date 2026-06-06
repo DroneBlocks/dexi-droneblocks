@@ -16,6 +16,7 @@ const { arm, disarm, setMode } = useMavlinkCommand()
 
 const visible = computed(() => route.path !== '/' && route.path !== '/index')
 const fmt = (n: number | null, d = 1) => (n == null || !Number.isFinite(n) ? '—' : n.toFixed(d))
+const connectionAge = computed(() => (ageMs.value / 1000).toFixed(0))
 
 type PillState = 'green' | 'amber' | 'red' | 'gray'
 
@@ -46,15 +47,17 @@ const isCurrentMode = (m: FlightMode) => {
 }
 
 // ---- Pill state derivations ----------------------------------------------
-const fc = computed<{ state: PillState; label: string }>(() => {
-  const t = telemetry.value
-  if (!t.connected) return { state: 'red', label: t.lastHeartbeatMs === 0 ? 'no link' : `lost ${(ageMs.value / 1000).toFixed(0)}s` }
-  return { state: 'green', label: 'live' }
-})
-
+// MODE pill carries connection state too — when the FC link is down it shows
+// "FC OFFLINE" / "FC LOST 12s" in red. That makes the standalone "FC live"
+// pill redundant, so the strip drops it.
 const mode = computed<{ state: PillState; label: string }>(() => {
   const t = telemetry.value
-  if (!t.connected) return { state: 'gray', label: '—' }
+  if (!t.connected) {
+    return {
+      state: 'red',
+      label: t.lastHeartbeatMs === 0 ? 'FC OFFLINE' : `FC LOST ${connectionAge.value}s`,
+    }
+  }
   const { main, sub } = currentModeTuple.value
   const m = FLIGHT_MODES.find((x) => x.main === main && x.sub === sub)
   return { state: 'green', label: m?.label.toUpperCase() ?? (t.mode.name ?? '—') }
@@ -180,9 +183,7 @@ onBeforeUnmount(() => {
 <template>
   <div v-if="visible" class="readiness-strip">
     <div class="rs-inner">
-      <Pill label="FC" :state="fc.state" :value="fc.label" />
-
-      <!-- Mode pill + dropdown -->
+      <!-- Mode pill + dropdown (also reflects FC link state when offline) -->
       <div ref="modeMenuEl" class="rs-anchor">
         <Pill
           label="Mode"
@@ -230,7 +231,7 @@ onBeforeUnmount(() => {
   background: rgb(15 23 42);
   border-bottom: 1px solid rgb(30 41 59);
   color: rgb(241 245 249);
-  padding: 0.4rem 1rem;
+  padding: 0.6rem 1.5rem;
   position: sticky;
   top: 0;
   z-index: 30;
@@ -239,9 +240,9 @@ onBeforeUnmount(() => {
 .rs-inner {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.6rem;
   flex-wrap: wrap;
-  max-width: 1400px;
+  max-width: 1600px;
   margin: 0 auto;
 }
 .rs-anchor {

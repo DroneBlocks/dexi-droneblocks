@@ -1,139 +1,281 @@
 <script setup lang="ts">
-// StatusTextFeed — scrollable list of recent PX4 STATUSTEXT messages from the
-// FC. Severity-colored. Sources from useTelemetry().statusTexts (ring buffer).
+// StatusTextFeed — QGC-style PX4 message overlay. Two surfaces:
+//   1. Transient toast that flashes at the top-center when a new STATUSTEXT
+//      arrives, auto-fades after TOAST_LIFETIME_MS.
+//   2. On-demand bottom-right log panel — small chip showing message count;
+//      click to expand into a scrollable list. Hidden by default so it
+//      doesn't compete with the camera/map view.
 
-import { computed, ref } from 'vue'
-import { useTelemetry } from '~/composables/useTelemetry'
+import { computed, ref, watch } from 'vue'
+import { useTelemetry, type StatusText } from '~/composables/useTelemetry'
 
 const { telemetry } = useTelemetry()
-const expanded = ref(true)
+
+const TOAST_LIFETIME_MS = 5000
+const TOAST_FADE_MS = 400
 
 const items = computed(() => telemetry.value.statusTexts)
-const latest = computed(() => items.value[0] ?? null)
+const latest = computed<StatusText | null>(() => items.value[0] ?? null)
 
+// ---- Toast on new message -------------------------------------------------
+const toastEntry = ref<StatusText | null>(null)
+const toastVisible = ref(false)
+let toastTimer: ReturnType<typeof setTimeout> | null = null
+let fadeTimer: ReturnType<typeof setTimeout> | null = null
+let lastToastedTs = 0
+
+watch(latest, (val) => {
+  if (!val) return
+  if (val.ts === lastToastedTs) return
+  lastToastedTs = val.ts
+  toastEntry.value = val
+  toastVisible.value = true
+  if (toastTimer) clearTimeout(toastTimer)
+  if (fadeTimer) clearTimeout(fadeTimer)
+  toastTimer = setTimeout(() => {
+    toastVisible.value = false
+    fadeTimer = setTimeout(() => { toastEntry.value = null }, TOAST_FADE_MS)
+  }, TOAST_LIFETIME_MS)
+}, { flush: 'post' })
+
+// ---- Log panel ------------------------------------------------------------
+const logOpen = ref(false)
+const lastSeenIndex = ref(0)
+const unseenCount = computed(() => Math.max(0, items.value.length - lastSeenIndex.value))
+
+const openLog = () => {
+  logOpen.value = true
+  lastSeenIndex.value = items.value.length
+}
+const closeLog = () => { logOpen.value = false }
+
+// ---- Helpers --------------------------------------------------------------
 const fmtTime = (ts: number) => {
   const d = new Date(ts)
-  return d.toLocaleTimeString('en-US', { hour12: false }) + '.' + String(d.getMilliseconds()).padStart(3, '0')
+  return d.toLocaleTimeString('en-US', { hour12: false })
 }
-
 const sevClass = (s: number) => {
-  if (s <= 2) return 'sev-critical'  // EMERGENCY / ALERT / CRITICAL
+  if (s <= 2) return 'sev-critical'
   if (s === 3) return 'sev-error'
   if (s === 4) return 'sev-warning'
   if (s === 5) return 'sev-notice'
   return 'sev-info'
 }
+const sevLabel = (s: number) => {
+  if (s <= 2) return 'CRIT'
+  if (s === 3) return 'ERR'
+  if (s === 4) return 'WARN'
+  if (s === 5) return 'NOTICE'
+  if (s === 7) return 'DEBUG'
+  return 'INFO'
+}
 </script>
 
 <template>
-  <div class="status-feed">
-    <div class="status-feed-header" @click="expanded = !expanded">
-      <span class="title">Messages</span>
-      <span v-if="latest" class="latest" :class="sevClass(latest.severity)" :title="latest.text">
-        <span class="latest-sev">{{ latest.severityName }}</span>
-        <span class="latest-text">{{ latest.text }}</span>
-      </span>
-      <span v-else class="muted">no messages yet</span>
-      <button class="toggle" :aria-label="expanded ? 'Collapse' : 'Expand'">
-        <svg viewBox="0 0 12 12" fill="currentColor" :style="{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)' }"><path d="M2 4l4 4 4-4z" /></svg>
-      </button>
-    </div>
-    <div v-show="expanded" class="status-feed-body">
-      <div v-if="items.length === 0" class="empty">Waiting for FC messages…</div>
-      <div v-else class="rows">
-        <div v-for="(it, i) in items" :key="i" class="row" :class="sevClass(it.severity)">
-          <span class="ts">{{ fmtTime(it.ts) }}</span>
-          <span class="sev">{{ it.severityName }}</span>
-          <span class="text">{{ it.text }}</span>
+  <Teleport to="body">
+    <!-- Toast: flashes top-center when a new message arrives -->
+    <Transition name="toast">
+      <div
+        v-if="toastEntry && toastVisible"
+        class="msg-toast"
+        :class="sevClass(toastEntry.severity)"
+        role="status"
+        @click="openLog"
+      >
+        <span class="toast-sev">{{ sevLabel(toastEntry.severity) }}</span>
+        <span class="toast-text">{{ toastEntry.text }}</span>
+      </div>
+    </Transition>
+
+    <!-- Persistent chip in bottom-right; click to open log panel -->
+    <button
+      v-if="items.length > 0 && !logOpen"
+      class="msg-chip"
+      :class="{ 'has-unseen': unseenCount > 0 }"
+      @click="openLog"
+      :title="`${items.length} message${items.length === 1 ? '' : 's'} — click to view`"
+    >
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 3h12v8H5l-3 3V3zm2 2v2h8V5H4zm0 3v2h6V8H4z" /></svg>
+      <span class="chip-count">{{ items.length }}</span>
+      <span v-if="unseenCount > 0" class="chip-badge">{{ unseenCount }}</span>
+    </button>
+
+    <!-- Log panel overlay -->
+    <Transition name="panel">
+      <div v-if="logOpen" class="msg-panel">
+        <div class="panel-header">
+          <span class="panel-title">FC Messages</span>
+          <span class="panel-count">{{ items.length }}</span>
+          <button class="panel-close" @click="closeLog" aria-label="Close">×</button>
+        </div>
+        <div class="panel-body">
+          <div v-if="items.length === 0" class="empty">No messages</div>
+          <div
+            v-for="(it, i) in items"
+            :key="i"
+            class="row"
+            :class="sevClass(it.severity)"
+          >
+            <span class="ts">{{ fmtTime(it.ts) }}</span>
+            <span class="sev">{{ sevLabel(it.severity) }}</span>
+            <span class="text">{{ it.text }}</span>
+          </div>
         </div>
       </div>
-    </div>
-  </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
-.status-feed {
-  background: rgb(15 23 42);
-  color: rgb(241 245 249);
-  border: 1px solid rgb(30 41 59);
-  border-radius: 8px;
+/* ---- Toast (top-center) ------------------------------------------------ */
+.msg-toast {
+  position: fixed;
+  top: 4.2rem;            /* below readiness strip */
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 1rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  backdrop-filter: blur(8px);
   font-family: ui-monospace, monospace;
-  font-size: 0.75rem;
-  overflow: hidden;
-}
-.status-feed-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.4rem 0.75rem;
-  background: rgb(30 41 59);
+  font-size: 0.82rem;
+  color: rgb(241 245 249);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  max-width: 70vw;
   cursor: pointer;
-  user-select: none;
 }
-.title {
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+.toast-sev {
   font-size: 0.65rem;
-  font-weight: 600;
-  color: rgb(148 163 184);
-}
-.muted { color: rgb(100 116 139); flex: 1; }
-.latest {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex: 1;
-  min-width: 0;
-}
-.latest-sev {
-  font-size: 0.6rem;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  padding: 0.05rem 0.35rem;
+  padding: 0.1rem 0.4rem;
   border-radius: 4px;
   background: rgb(51 65 85);
 }
-.latest-text {
+.toast-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.toggle {
+
+.toast-enter-active, .toast-leave-active {
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.toast-enter-from, .toast-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -10px);
+}
+
+/* ---- Persistent chip --------------------------------------------------- */
+.msg-chip {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  z-index: 55;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: rgb(226 232 240);
+  font-family: ui-monospace, monospace;
+  font-size: 0.72rem;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: filter 0.12s ease;
+}
+.msg-chip:hover { filter: brightness(1.3); }
+.msg-chip svg { width: 14px; height: 14px; }
+.chip-count { font-weight: 600; }
+.chip-badge {
+  background: rgb(239 68 68);
+  color: white;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0.05rem 0.4rem;
+  font-size: 0.65rem;
+}
+
+/* ---- Log panel --------------------------------------------------------- */
+.msg-panel {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  z-index: 60;
+  width: min(520px, calc(100vw - 2rem));
+  max-height: 50vh;
+  background: rgba(15, 23, 42, 0.96);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 10px;
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  color: rgb(241 245 249);
+  font-family: ui-monospace, monospace;
+}
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+.panel-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgb(148 163 184);
+}
+.panel-count {
+  font-size: 0.7rem;
+  color: rgb(100 116 139);
+  flex: 1;
+}
+.panel-close {
   background: transparent;
   border: none;
   color: rgb(148 163 184);
+  font-size: 1.25rem;
+  line-height: 1;
   cursor: pointer;
-  padding: 0.15rem;
+  padding: 0 0.25rem;
 }
-.toggle svg { width: 12px; height: 12px; transition: transform 0.15s ease; }
+.panel-close:hover { color: rgb(241 245 249); }
 
-.status-feed-body {
-  max-height: 200px;
+.panel-body {
   overflow-y: auto;
+  padding: 0.25rem 0;
 }
 .empty {
-  padding: 0.75rem;
-  color: rgb(100 116 139);
+  padding: 1rem;
   text-align: center;
-}
-.rows {
-  display: flex;
-  flex-direction: column;
+  color: rgb(100 116 139);
+  font-size: 0.78rem;
 }
 .row {
   display: grid;
-  grid-template-columns: 110px 80px 1fr;
+  grid-template-columns: 70px 60px 1fr;
   gap: 0.5rem;
   padding: 0.3rem 0.75rem;
+  font-size: 0.72rem;
   border-bottom: 1px solid rgba(30, 41, 59, 0.5);
 }
 .row:last-child { border-bottom: none; }
 .ts { color: rgb(100 116 139); }
 .sev {
-  font-size: 0.6rem;
+  font-size: 0.62rem;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-weight: 600;
+  font-weight: 700;
   align-self: center;
 }
 .text { word-break: break-word; }
@@ -149,8 +291,22 @@ const sevClass = (s: number) => {
 .sev-critical .sev { color: rgb(220 38 38); }
 .sev-critical .text { color: rgb(254 202 202); font-weight: 600; }
 
-.latest.sev-warning .latest-sev { background: rgba(245, 158, 11, 0.3); color: rgb(252 211 77); }
-.latest.sev-error .latest-sev { background: rgba(239, 68, 68, 0.3); color: rgb(252 165 165); }
-.latest.sev-critical .latest-sev { background: rgba(220, 38, 38, 0.4); color: rgb(254 202 202); }
-.latest.sev-notice .latest-sev { background: rgba(59, 130, 246, 0.3); color: rgb(191 219 254); }
+/* Toast variants */
+.msg-toast.sev-warning { border-color: rgba(245, 158, 11, 0.5); }
+.msg-toast.sev-warning .toast-sev { background: rgba(245, 158, 11, 0.3); color: rgb(252 211 77); }
+.msg-toast.sev-error { border-color: rgba(239, 68, 68, 0.5); }
+.msg-toast.sev-error .toast-sev { background: rgba(239, 68, 68, 0.3); color: rgb(252 165 165); }
+.msg-toast.sev-critical { border-color: rgba(220, 38, 38, 0.6); }
+.msg-toast.sev-critical .toast-sev { background: rgba(220, 38, 38, 0.4); color: rgb(254 202 202); }
+.msg-toast.sev-notice { border-color: rgba(96, 165, 250, 0.4); }
+.msg-toast.sev-notice .toast-sev { background: rgba(96, 165, 250, 0.3); color: rgb(191 219 254); }
+
+/* Panel transitions */
+.panel-enter-active, .panel-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.panel-enter-from, .panel-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
+}
 </style>
