@@ -62,6 +62,18 @@ export interface Telemetry {
 const HEARTBEAT_TIMEOUT_MS = 3000
 const RECONNECT_DELAY_MS = 2000
 
+// Slow-rate messages — mavlink2rest's WS streams them at ~0.1 Hz (PX4 rate
+// limit), so we'd otherwise wait 10+ seconds for the pills to populate on
+// page load. Poll the HTTP cache for these on top of the WS stream.
+const SLOW_RATE_MESSAGES = [
+  'BATTERY_STATUS',
+  'SYS_STATUS',
+  'ESTIMATOR_STATUS',
+  'DISTANCE_SENSOR',
+  'ALTITUDE',
+] as const
+const SLOW_POLL_INTERVAL_MS = 2000
+
 function newTelemetry(): Telemetry {
   return {
     connected: false,
@@ -84,21 +96,20 @@ const telemetry = ref<Telemetry>(newTelemetry())
 let ws: WebSocket | null = null
 let reconnectTimer: number | null = null
 let nowTicker: number | null = null
+let slowPollTimer: number | null = null
 let consumerCount = 0
 
-function getMavlink2RestUrl(): string {
-  if (typeof window === 'undefined') return ''
+function getMavlinkBaseUrl(): { ws: string; http: string } {
+  if (typeof window === 'undefined') return { ws: '', http: '' }
   const params = new URLSearchParams(window.location.search)
   const host = params.get('mavlinkHost') || window.location.hostname
   const isSecure = window.location.protocol === 'https:'
-  // mavlink2rest exposes WS at /ws/mavlink by default. Behind tunnels it may
-  // be served on a subpath; allow override via ?mavlinkPath=...
-  const customPath = params.get('mavlinkPath')
-  const protocol = isSecure ? 'wss:' : 'ws:'
-  // Default to bare 8088 (matches dexi-os config); behind https tunnels users
-  // usually proxy ws/wss to the same host on /ws/mavlink.
-  if (customPath) return `${protocol}//${host}${customPath}`
-  return `${protocol}//${host}:8088/ws/mavlink`
+  const wsProtocol = isSecure ? 'wss:' : 'ws:'
+  const httpProtocol = isSecure ? 'https:' : 'http:'
+  return {
+    ws: `${wsProtocol}//${host}:8088/ws/mavlink`,
+    http: `${httpProtocol}//${host}:8088`,
+  }
 }
 
 // Best-effort PX4 mode name from custom_mode (high byte = main mode).
@@ -194,10 +205,36 @@ function handleMavlinkMessage(envelope: any) {
   }
 }
 
+async function pollSlowRateMessages() {
+  const { http } = getMavlinkBaseUrl()
+  if (!http) return
+  await Promise.all(
+    SLOW_RATE_MESSAGES.map(async (msgType) => {
+      try {
+        const res = await fetch(`${http}/mavlink/vehicles/1/components/1/messages/${msgType}`, {
+          signal: AbortSignal.timeout(1500),
+        })
+        if (!res.ok) return
+        const envelope = await res.json()
+        if (envelope?.message) handleMavlinkMessage(envelope)
+      } catch {
+        // ignore — slow-rate; we'll try again on next tick
+      }
+    })
+  )
+}
+
+function startSlowPoll() {
+  if (slowPollTimer) return
+  // Fire immediately so cards populate on first load, then keep ticking.
+  pollSlowRateMessages()
+  slowPollTimer = window.setInterval(pollSlowRateMessages, SLOW_POLL_INTERVAL_MS)
+}
+
 function ensureConnection() {
   if (typeof window === 'undefined') return
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return
-  const url = getMavlink2RestUrl()
+  const { ws: url } = getMavlinkBaseUrl()
   if (!url) return
   try {
     ws = new WebSocket(url)
@@ -249,6 +286,7 @@ function stopAll() {
   if (ws) { try { ws.close() } catch {} ws = null }
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
   if (nowTicker) { clearInterval(nowTicker); nowTicker = null }
+  if (slowPollTimer) { clearInterval(slowPollTimer); slowPollTimer = null }
 }
 
 /**
@@ -259,6 +297,7 @@ export function useTelemetry() {
   consumerCount++
   ensureConnection()
   startNowTicker()
+  startSlowPoll()
 
   onUnmounted(() => {
     consumerCount--
