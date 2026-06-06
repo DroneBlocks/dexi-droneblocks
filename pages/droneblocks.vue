@@ -2063,17 +2063,9 @@ onUnmounted(() => {
         <a href="/" class="logo-link">
           <img src="/droneblocks-icon.jpg" alt="DroneBlocks" class="logo-icon" />
         </a>
-        <div class="connection-indicator" :class="{ connected: connected, disconnected: !connected }">
-          <span class="indicator-dot"></span>
-          <span class="indicator-text hidden sm:inline">{{ connected ? 'Connected' : 'Disconnected' }}</span>
-        </div>
       </div>
 
       <div class="header-center">
-        <div class="telemetry-group">
-          <FlightModeDisplay v-if="ros" :ros="ros" />
-          <span v-else class="telemetry-item">Mode: Unknown</span>
-        </div>
         <div v-if="connected" class="telemetry-item apriltag-indicator hidden lg:flex">
           <span class="apriltag-label">🏷️ Tag:</span>
           <span class="apriltag-value" :class="{ 'tag-detected': currentAprilTagId >= 0 }">
@@ -2084,7 +2076,6 @@ onUnmounted(() => {
           <span>N: {{ nedNorth.toFixed(1) }}</span>
           <span>E: {{ nedEast.toFixed(1) }}</span>
           <span>D: {{ nedDown.toFixed(1) }}</span>
-          <span>H: {{ nedHeading.toFixed(0) }}°</span>
         </div>
       </div>
 
