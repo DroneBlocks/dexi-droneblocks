@@ -1,39 +1,6 @@
 <template>
   <div class="w-full bg-gray-900 text-white p-2 sm:p-4">
-    <!-- Telemetry Display -->
-    <div class="flex flex-wrap items-center gap-2 sm:gap-4 md:gap-6 mb-2 sm:mb-4 text-xs sm:text-sm">
-      <!-- Flight Mode -->
-      <div class="flex items-center space-x-1 sm:space-x-2">
-        <FlightModeDisplay :ros="ros" class="font-mono" />
-      </div>
-
-      <!-- Battery -->
-      <div class="flex items-center space-x-1 sm:space-x-2">
-        <span class="text-gray-400 hidden sm:inline">Battery:</span>
-        <span class="text-gray-400 sm:hidden">Bat:</span>
-        <span class="font-mono" :class="batteryColorClass">{{ batteryDisplay }}</span>
-      </div>
-
-      <!-- Altitude -->
-      <div class="flex items-center space-x-1 sm:space-x-2">
-        <span class="text-gray-400">Alt:</span>
-        <span class="font-mono text-green-400">{{ altitudeDisplay }}</span>
-      </div>
-
-      <!-- Ground Speed - hidden on very small screens -->
-      <div class="hidden sm:flex items-center space-x-1 sm:space-x-2">
-        <span class="text-gray-400">Speed:</span>
-        <span class="font-mono text-yellow-400">{{ speedDisplay }}</span>
-      </div>
-
-      <!-- Heading - hidden on small screens -->
-      <div class="hidden md:flex items-center space-x-1 sm:space-x-2">
-        <span class="text-gray-400">Heading:</span>
-        <span class="font-mono text-purple-400">{{ headingDisplay }}</span>
-      </div>
-    </div>
-
-    <!-- Control Buttons -->
+    <!-- Control Buttons (telemetry now lives in the global ReadinessStrip) -->
     <div class="flex flex-wrap items-center gap-2 sm:gap-4">
       <!-- Mode Buttons -->
       <button
@@ -92,74 +59,27 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, defineExpose } from 'vue'
+import { ref, onMounted, onBeforeUnmount, defineExpose } from 'vue'
 import ROSLIB from 'roslib'
 import { useROS } from '~/composables/useROS'
 
 const { getROSURL } = useROS()
 
-// ROS connection - make it reactive so FlightModeDisplay can properly subscribe
+// ROS connection
 const ros = ref<ROSLIB.Ros | null>(null)
 
-// State
-const navState = ref('N/A')
+// State driving the buttons
 const isArmed = ref(false)
 const isFlying = ref(false)
 const isOffboardActive = ref(false)
-const batteryPercentage = ref<number | null>(null)
-
-// Telemetry state
-const gpsLat = ref<number | null>(null)
-const gpsLon = ref<number | null>(null)
-const altitude = ref<number | null>(null)
-const groundSpeed = ref<number | null>(null)
-const heading = ref<number | null>(null)
 
 // Offboard target position (reactive so it can be updated by other components)
 const offboardTargetPosition = ref({ x: 0, y: 0, z: -1.0, yaw: 0 })
-
-// Computed properties for battery display
-const batteryDisplay = computed(() => {
-  if (batteryPercentage.value === null) return 'N/A'
-  return `${Math.round(batteryPercentage.value)}%`
-})
-
-const batteryColorClass = computed(() => {
-  if (batteryPercentage.value === null) return 'text-gray-400'
-  if (batteryPercentage.value > 50) return 'text-green-400'
-  if (batteryPercentage.value > 20) return 'text-yellow-400'
-  return 'text-red-400'
-})
-
-// Computed properties for telemetry display
-const gpsDisplay = computed(() => {
-  if (gpsLat.value === null || gpsLon.value === null) return 'No Fix'
-  return `${gpsLat.value.toFixed(6)}, ${gpsLon.value.toFixed(6)}`
-})
-
-const altitudeDisplay = computed(() => {
-  if (altitude.value === null) return 'N/A'
-  return `${altitude.value.toFixed(1)}m`
-})
-
-const speedDisplay = computed(() => {
-  if (groundSpeed.value === null) return 'N/A'
-  return `${groundSpeed.value.toFixed(1)} m/s`
-})
-
-const headingDisplay = computed(() => {
-  if (heading.value === null) return 'N/A'
-  return `${heading.value.toFixed(0)}°`
-})
 
 // Topics
 let vehicleStatusTopic: ROSLIB.Topic | null = null
 let vehicleCommandTopic: ROSLIB.Topic | null = null
 let offboardManagerTopic: ROSLIB.Topic | null = null
-let batteryStatusTopic: ROSLIB.Topic | null = null
-let gpsPositionTopic: ROSLIB.Topic | null = null
-let localPositionTopic: ROSLIB.Topic | null = null
-let attitudeTopic: ROSLIB.Topic | null = null
 
 // Vehicle status topic fallback logic
 let vehicleStatusFallbackTimer: NodeJS.Timeout | null = null
@@ -227,96 +147,11 @@ onMounted(() => {
     name: '/dexi/offboard_manager',
     messageType: 'dexi_interfaces/msg/OffboardNavCommand'
   })
-
-  // Subscribe to battery status topic
-  batteryStatusTopic = new ROSLIB.Topic({
-    ros: ros.value as ROSLIB.Ros,
-    name: '/fmu/out/battery_status',
-    messageType: 'px4_msgs/msg/BatteryStatus',
-    throttle_rate: 1000,
-    queue_length: 1,
-  })
-
-  batteryStatusTopic.subscribe((message: any) => {
-    // PX4 battery_status message has 'remaining' field as float (0.0 to 1.0)
-    if (message.remaining !== undefined) {
-      batteryPercentage.value = message.remaining * 100
-    }
-  })
-
-  // Subscribe to GPS position topic
-  gpsPositionTopic = new ROSLIB.Topic({
-    ros: ros.value as ROSLIB.Ros,
-    name: '/fmu/out/vehicle_gps_position',
-    messageType: 'px4_msgs/msg/VehicleGpsPosition',
-    throttle_rate: 1000,
-    queue_length: 1,
-  })
-
-  gpsPositionTopic.subscribe((message: any) => {
-    // GPS coordinates are already in degrees
-    if (message.latitude_deg !== undefined && message.longitude_deg !== undefined) {
-      gpsLat.value = message.latitude_deg
-      gpsLon.value = message.longitude_deg
-    }
-  })
-
-  // Subscribe to local position topic for velocity and altitude
-  localPositionTopic = new ROSLIB.Topic({
-    ros: ros.value as ROSLIB.Ros,
-    name: '/fmu/out/vehicle_local_position',
-    messageType: 'px4_msgs/msg/VehicleLocalPosition',
-    throttle_rate: 200,
-    queue_length: 1,
-  })
-
-  localPositionTopic.subscribe((message: any) => {
-    // Calculate ground speed from vx and vy
-    if (message.vx !== undefined && message.vy !== undefined) {
-      groundSpeed.value = Math.sqrt(message.vx * message.vx + message.vy * message.vy)
-    }
-    // Altitude from z position (NED frame, so negate for positive up)
-    if (message.z !== undefined) {
-      altitude.value = -message.z
-    }
-  })
-
-  // Subscribe to attitude topic for heading
-  attitudeTopic = new ROSLIB.Topic({
-    ros: ros.value as ROSLIB.Ros,
-    name: '/fmu/out/vehicle_attitude',
-    messageType: 'px4_msgs/msg/VehicleAttitude',
-    throttle_rate: 200,
-    queue_length: 1,
-  })
-
-  attitudeTopic.subscribe((message: any) => {
-    // Convert quaternion to heading (yaw in degrees)
-    if (message.q !== undefined && message.q.length >= 4) {
-      const q = message.q
-      // Calculate yaw from quaternion
-      const yaw = Math.atan2(2.0 * (q[0] * q[3] + q[1] * q[2]), 1.0 - 2.0 * (q[2] * q[2] + q[3] * q[3]))
-      // Convert to degrees and normalize to 0-360
-      heading.value = ((yaw * 180.0 / Math.PI) + 360) % 360
-    }
-  })
 })
 
 onBeforeUnmount(() => {
   if (vehicleStatusTopic) {
     vehicleStatusTopic.unsubscribe()
-  }
-  if (batteryStatusTopic) {
-    batteryStatusTopic.unsubscribe()
-  }
-  if (gpsPositionTopic) {
-    gpsPositionTopic.unsubscribe()
-  }
-  if (localPositionTopic) {
-    localPositionTopic.unsubscribe()
-  }
-  if (attitudeTopic) {
-    attitudeTopic.unsubscribe()
   }
   if (vehicleStatusFallbackTimer) {
     clearTimeout(vehicleStatusFallbackTimer)
@@ -367,7 +202,6 @@ const subscribeToVehicleStatus = (topicName: string, isFallback: boolean = false
     }
 
     // Process the vehicle status message
-    navState.value = message.nav_state
     isArmed.value = message.arming_state === 2 // 2 = ARMED
     isFlying.value = message.nav_state !== 18 && message.nav_state !== 13
   })
@@ -413,7 +247,7 @@ const sendOffboardManagerCommand = (command: string, distance_or_degrees: number
 
 const setMode = (mode: number) => {
   console.log('Setting mode:', mode)
-  
+
   // For position mode, we need to set both the base mode and custom mode
   if (mode === 2) { // POSITION mode
     // MAV_CMD_DO_SET_MODE with:
@@ -421,7 +255,7 @@ const setMode = (mode: number) => {
     // param2: PX4_CUSTOM_MAIN_MODE_POSCTL (3)
     sendCommand(176, 1, 3)
     console.log('Setting position mode with custom mode enabled')
-  } 
+  }
   // For takeoff mode, we need to set the altitude
   else if (mode === 17) { // TAKEOFF mode
     sendCommand(22, 0, 0, 0, 0, 0, 0, 3.0) // MAV_CMD_NAV_TAKEOFF with 3m altitude
@@ -489,4 +323,4 @@ defineExpose({
   isOffboardActive,
   offboardTargetPosition
 })
-</script> 
+</script>
