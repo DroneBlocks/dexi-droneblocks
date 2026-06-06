@@ -188,23 +188,47 @@
 
         <!-- WiFi Mode Section -->
         <div class="status-card mb-6">
-          <div class="flex items-center justify-between mb-4">
-            <h2 class="status-card-title mb-0">WiFi Mode</h2>
-            <div class="flex items-center bg-slate-100 rounded-lg p-1">
+          <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <div class="flex items-center gap-3">
+              <h2 class="status-card-title mb-0">WiFi Mode</h2>
+              <span
+                class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+                :class="{
+                  'bg-amber-100 text-amber-800': status!.wifiMode === 'hotspot',
+                  'bg-blue-100 text-blue-800': status!.wifiMode === 'client',
+                  'bg-slate-200 text-slate-600': status!.wifiMode === 'disconnected'
+                }"
+              >
+                <span class="inline-block w-1.5 h-1.5 rounded-full"
+                  :class="{
+                    'bg-amber-500': status!.wifiMode === 'hotspot',
+                    'bg-blue-500': status!.wifiMode === 'client',
+                    'bg-slate-400': status!.wifiMode === 'disconnected'
+                  }"
+                />
+                Current:
+                {{
+                  status!.wifiMode === 'hotspot' ? 'Hotspot'
+                  : status!.wifiMode === 'client' ? 'Client'
+                  : 'Disconnected'
+                }}
+              </span>
+            </div>
+            <div class="flex items-center gap-2">
               <button
-                class="mode-btn"
-                :class="status!.wifiMode === 'hotspot' ? 'mode-btn-active' : ''"
+                v-if="status!.wifiMode !== 'hotspot'"
+                class="btn btn-sm btn-outline btn-warning"
                 :disabled="switching"
                 @click="switchToHotspot"
               >
-                Hotspot
+                📡 Switch to Hotspot
               </button>
               <button
-                class="mode-btn"
-                :class="status!.wifiMode === 'client' ? 'mode-btn-active' : ''"
-                :disabled="switching || !hasClientNetworks"
+                v-if="status!.wifiMode !== 'client' && hasClientNetworks"
+                class="btn btn-sm btn-outline btn-info"
+                :disabled="switching"
               >
-                Client
+                📶 Switch to Client
               </button>
             </div>
           </div>
