@@ -167,6 +167,9 @@
           </div>
         </div>
 
+        <!-- ROS 2 / µROS diagnostic -->
+        <ROS2HealthCard class="mb-6" />
+
         <!-- Cellular (only when a modem is present) -->
         <div v-if="cellularInterface" class="status-card mb-6">
           <h2 class="status-card-title">Cellular</h2>
