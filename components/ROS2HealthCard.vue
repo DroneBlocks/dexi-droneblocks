@@ -61,9 +61,18 @@ function shortTopicName(name: string): string {
 </script>
 
 <template>
-  <div class="status-card">
-    <div class="flex items-center justify-between mb-3">
-      <h2 class="status-card-title mb-0">ROS 2 / µROS</h2>
+  <div class="bg-white rounded-xl border border-slate-200 p-6">
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center gap-3">
+        <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wider">ROS 2</h2>
+        <NuxtLink
+          to="/ros"
+          class="text-xs text-blue-600 hover:text-blue-800 hover:underline"
+          title="Open ROS 2 explorer"
+        >
+          Open explorer →
+        </NuxtLink>
+      </div>
       <span
         class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium"
         :class="{
@@ -86,39 +95,33 @@ function shortTopicName(name: string): string {
       </span>
     </div>
 
-    <div class="space-y-3">
-      <!-- rosbridge connection -->
-      <div class="status-row">
-        <span class="status-label">rosbridge</span>
-        <span class="status-value">
+    <div class="space-y-2">
+      <div class="flex items-center justify-between">
+        <span class="text-sm text-slate-500">rosbridge</span>
+        <span class="text-sm text-slate-900 font-medium flex items-center gap-1.5">
           <span
-            class="inline-block w-2 h-2 rounded-full mr-1.5 align-middle"
+            class="inline-block w-2 h-2 rounded-full"
             :class="health.connected ? 'bg-green-500' : 'bg-red-500'"
           />
           {{ health.connected ? 'connected' : 'offline' }}
         </span>
       </div>
-
-      <!-- topic counts -->
-      <div class="status-row">
-        <span class="status-label">PX4 topics (/fmu/*)</span>
-        <span class="status-value font-mono">
-          {{ health.fmuTopics ?? '—' }}
-        </span>
+      <div class="flex items-center justify-between">
+        <span class="text-sm text-slate-500 font-mono">/fmu/*</span>
+        <span class="text-sm text-slate-900 font-medium font-mono">{{ health.fmuTopics ?? '—' }}</span>
       </div>
-      <div class="status-row">
-        <span class="status-label">DEXI topics (/dexi/*)</span>
-        <span class="status-value font-mono">{{ health.dexiTopics ?? '—' }}</span>
+      <div class="flex items-center justify-between">
+        <span class="text-sm text-slate-500 font-mono">/dexi/*</span>
+        <span class="text-sm text-slate-900 font-medium font-mono">{{ health.dexiTopics ?? '—' }}</span>
       </div>
-      <div class="status-row">
-        <span class="status-label">Total topics</span>
-        <span class="status-value font-mono">{{ health.totalTopics ?? '—' }}</span>
+      <div class="flex items-center justify-between">
+        <span class="text-sm text-slate-500">All topics</span>
+        <span class="text-sm text-slate-900 font-medium font-mono">{{ health.totalTopics ?? '—' }}</span>
       </div>
 
-      <!-- per-topic probes -->
       <div v-if="health.probes.length" class="border-t border-slate-100 pt-3 mt-3">
         <div class="text-xs uppercase tracking-wide text-slate-400 mb-2 font-medium">
-          Critical PX4 topic probes
+          Topic probes
         </div>
         <div class="space-y-1.5">
           <div
@@ -146,11 +149,7 @@ function shortTopicName(name: string): string {
         </div>
       </div>
 
-      <!-- diagnostic hint -->
-      <div
-        v-if="verdict.hint"
-        class="border-t border-slate-100 pt-3 mt-3"
-      >
+      <div v-if="verdict.hint" class="border-t border-slate-100 pt-3 mt-3">
         <p
           class="text-xs leading-relaxed"
           :class="{
