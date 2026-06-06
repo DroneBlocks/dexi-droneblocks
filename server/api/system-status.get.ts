@@ -160,6 +160,28 @@ async function getSavedConnections(): Promise<SavedConnection[]> {
   return connections;
 }
 
+// /proc/stat aggregate CPU usage. Reads twice with a short delay and computes
+// the idle-time delta ratio. Same sampling pattern as `top` / `vmstat`.
+async function getCpuUsagePct(): Promise<number | null> {
+  const read = async () => {
+    const raw = (await readFile("/proc/stat", "utf-8")).split("\n")[0];
+    const fields = raw.split(/\s+/).slice(1).map(Number);
+    const total = fields.reduce((a, b) => a + b, 0);
+    const idle = fields[3] + (fields[4] || 0); // idle + iowait
+    return { total, idle };
+  };
+  try {
+    const a = await read();
+    await new Promise((r) => setTimeout(r, 100));
+    const b = await read();
+    const dTotal = b.total - a.total;
+    const dIdle = b.idle - a.idle;
+    return dTotal > 0 ? Math.max(0, Math.min(100, 100 * (1 - dIdle / dTotal))) : null;
+  } catch {
+    return null;
+  }
+}
+
 async function getWifiMode(): Promise<"hotspot" | "client" | "disconnected"> {
   const activeRaw = await run(
     "nmcli -t -f NAME,TYPE connection show --active 2>/dev/null"
@@ -172,7 +194,7 @@ async function getWifiMode(): Promise<"hotspot" | "client" | "disconnected"> {
 }
 
 export default defineEventHandler(async () => {
-  const [hostname, uptimeRaw, memRaw, tempRaw, model, interfaces, savedConnections, wifiMode] =
+  const [hostname, uptimeRaw, memRaw, tempRaw, model, interfaces, savedConnections, wifiMode, cpuUsagePct] =
     await Promise.all([
       run("hostname"),
       readProc("/proc/uptime"),
@@ -182,6 +204,7 @@ export default defineEventHandler(async () => {
       getNetworkInterfaces(),
       getSavedConnections(),
       getWifiMode(),
+      getCpuUsagePct(),
     ]);
 
   // Parse uptime from seconds
@@ -207,6 +230,7 @@ export default defineEventHandler(async () => {
     uptime,
     memory,
     cpuTempC,
+    cpuUsagePct,
     interfaces,
     savedConnections,
     wifiMode,

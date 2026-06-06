@@ -34,8 +34,8 @@
       </div>
 
       <template v-else>
-        <!-- Top row: System + Memory -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+        <!-- Top row: System + CPU + Memory + Cellular -->
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-6">
 
           <!-- System -->
           <div class="status-card">
@@ -53,8 +53,15 @@
                 <span class="status-label">Uptime</span>
                 <span class="status-value">{{ status!.uptime || 'N/A' }}</span>
               </div>
+            </div>
+          </div>
+
+          <!-- CPU -->
+          <div class="status-card">
+            <h2 class="status-card-title">CPU</h2>
+            <div class="space-y-3">
               <div v-if="status!.cpuTempC != null" class="status-row">
-                <span class="status-label">CPU Temp</span>
+                <span class="status-label">Temperature</span>
                 <span
                   class="status-value"
                   :class="{
@@ -65,6 +72,23 @@
                 >
                   {{ status!.cpuTempC!.toFixed(1) }} °C
                 </span>
+              </div>
+              <div v-if="status!.cpuUsagePct != null" class="status-row">
+                <span class="status-label">Load</span>
+                <span class="status-value">{{ cpuPercent }}%</span>
+              </div>
+              <div v-if="status!.cpuUsagePct != null" class="mt-3">
+                <div class="w-full bg-slate-200 rounded-full h-2">
+                  <div
+                    class="h-2 rounded-full transition-all duration-500"
+                    :class="{
+                      'bg-green-500': cpuPercent < 70,
+                      'bg-amber-500': cpuPercent >= 70 && cpuPercent < 90,
+                      'bg-red-500': cpuPercent >= 90
+                    }"
+                    :style="{ width: cpuPercent + '%' }"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -297,6 +321,7 @@ interface SystemStatus {
   uptime: string;
   memory: { totalMb: number; usedMb: number; freeMb: number } | null;
   cpuTempC: number | null;
+  cpuUsagePct: number | null;
   interfaces: NetworkInterface[];
   savedConnections: SavedConnection[];
   wifiMode: "hotspot" | "client" | "disconnected";
@@ -315,6 +340,11 @@ const memPercent = computed(() => {
   return Math.round(
     (status.value.memory.usedMb / status.value.memory.totalMb) * 100
   );
+});
+
+const cpuPercent = computed(() => {
+  const v = status.value?.cpuUsagePct;
+  return v == null ? 0 : Math.round(v);
 });
 
 const wifiInterface = computed(() =>
