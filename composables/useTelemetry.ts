@@ -57,7 +57,21 @@ export interface Telemetry {
     min: number | null
     max: number | null
   }
+  /** Most recent STATUSTEXT messages from the FC (newest first). */
+  statusTexts: StatusText[]
 }
+
+export interface StatusText {
+  ts: number       // ms
+  text: string
+  severity: number // 0=EMERGENCY, 1=ALERT, 2=CRITICAL, 3=ERROR, 4=WARNING, 5=NOTICE, 6=INFO, 7=DEBUG
+  severityName: 'EMERGENCY' | 'ALERT' | 'CRITICAL' | 'ERROR' | 'WARNING' | 'NOTICE' | 'INFO' | 'DEBUG'
+}
+
+const STATUSTEXT_BUFFER = 50
+const SEVERITY_NAMES: StatusText['severityName'][] = [
+  'EMERGENCY', 'ALERT', 'CRITICAL', 'ERROR', 'WARNING', 'NOTICE', 'INFO', 'DEBUG',
+]
 
 const HEARTBEAT_TIMEOUT_MS = 3000
 const RECONNECT_DELAY_MS = 2000
@@ -88,6 +102,7 @@ function newTelemetry(): Telemetry {
     armed: false,
     ekf: { flagsRaw: null, flowFusing: false, posHorizAcc: null, posVertAcc: null },
     range: { current: null, min: null, max: null },
+    statusTexts: [],
   }
 }
 
@@ -200,6 +215,36 @@ function handleMavlinkMessage(envelope: any) {
       T.altitude.msl = Number.isFinite(m.altitude_amsl) ? m.altitude_amsl : T.altitude.msl
       T.altitude.relative = Number.isFinite(m.altitude_relative) ? m.altitude_relative : T.altitude.relative
       T.altitude.terrain = Number.isFinite(m.altitude_terrain) ? m.altitude_terrain : T.altitude.terrain
+      break
+    }
+    case 'STATUSTEXT': {
+      // text is fixed-length; trim trailing nulls / padding
+      const raw = typeof m.text === 'string' ? m.text : Array.isArray(m.text) ? m.text.join('') : ''
+      const text = raw.replace(/\0/g, '').trim()
+      if (!text) break
+      const sev = Number.isFinite(m.severity?.type ? -1 : m.severity) ? Number(m.severity) : 6
+      // mavlink2rest may send severity as { type: 'MAV_SEVERITY_INFO' } or a raw int
+      let sevNum = 6
+      if (typeof m.severity === 'number') sevNum = m.severity
+      else if (m.severity?.type) {
+        const mapping: Record<string, number> = {
+          MAV_SEVERITY_EMERGENCY: 0, MAV_SEVERITY_ALERT: 1, MAV_SEVERITY_CRITICAL: 2,
+          MAV_SEVERITY_ERROR: 3, MAV_SEVERITY_WARNING: 4, MAV_SEVERITY_NOTICE: 5,
+          MAV_SEVERITY_INFO: 6, MAV_SEVERITY_DEBUG: 7,
+        }
+        sevNum = mapping[m.severity.type] ?? 6
+      }
+      const entry: StatusText = {
+        ts: Date.now(),
+        text,
+        severity: sevNum,
+        severityName: SEVERITY_NAMES[sevNum] ?? 'INFO',
+      }
+      // Dedupe consecutive identical messages within 500ms (PX4 multi-frag STATUSTEXT)
+      const last = T.statusTexts[0]
+      if (last && last.text === entry.text && entry.ts - last.ts < 500) break
+      T.statusTexts.unshift(entry)
+      if (T.statusTexts.length > STATUSTEXT_BUFFER) T.statusTexts.length = STATUSTEXT_BUFFER
       break
     }
   }

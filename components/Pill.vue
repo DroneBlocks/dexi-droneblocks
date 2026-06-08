@@ -40,17 +40,14 @@ defineEmits<{ click: [event: MouseEvent] }>()
 .pill {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.2rem 0.55rem;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem;
   border-radius: 999px;
   font-family: ui-monospace, monospace;
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   line-height: 1;
   white-space: nowrap;
   border: 1px solid transparent;
-  font: inherit;
-  font-family: ui-monospace, monospace;
-  font-size: 0.75rem;
 }
 .dot {
   width: 6px;
@@ -62,7 +59,7 @@ defineEmits<{ click: [event: MouseEvent] }>()
   color: rgb(148 163 184);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  font-size: 0.65rem;
+  font-size: 0.68rem;
   font-weight: 600;
 }
 .pill-value {
