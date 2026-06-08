@@ -1,6 +1,6 @@
 <template>
   <div class="flex flex-col h-full">
-    <MainMenu ref="mainMenuRef" @open-keyboard-control="showKeyboardControl = true" />
+    <MainMenu @open-keyboard-control="showKeyboardControl = true" />
     <!-- Main Content -->
     <div class="flex-1 flex flex-col md:flex-row overflow-hidden">
       <!-- Main Content Area with Tabs -->
@@ -40,7 +40,7 @@
         <div class="flex-1 relative min-h-0">
           <!-- Camera Tab -->
           <div v-if="activeTab === 'camera'" class="p-2 sm:p-4 h-full">
-            <CameraFeed :should-invert="mainMenuRef?.cameraInverted ?? false" />
+            <CameraFeed />
           </div>
 
           <!-- Map Tab -->
@@ -112,7 +112,6 @@ const route = useRoute();
 // Tab management
 const activeTab = ref('camera');
 const droneGridRef = ref();
-const mainMenuRef = ref();
 
 // Keyboard control modal
 const showKeyboardControl = ref(false);
