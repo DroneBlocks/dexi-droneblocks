@@ -27,7 +27,7 @@ export interface Telemetry {
   }
   altitude: {
     msl: number | null          // m (from ALTITUDE)
-    relative: number | null     // m above home (from VFR_HUD/ALTITUDE)
+    relative: number | null     // m above home (from ALTITUDE.altitude_relative only — VFR_HUD.alt is MSL, not relative)
     terrain: number | null      // m above ground (from ALTITUDE.altitude_terrain)
   }
   speed: {
@@ -154,9 +154,20 @@ function handleMavlinkMessage(envelope: any) {
     case 'HEARTBEAT': {
       T.lastHeartbeatMs = Date.now()
       T.connected = true
-      const base = Number(m.base_mode ?? 0)
-      T.mode.base = base
-      T.armed = (base & 0x80) !== 0  // MAV_MODE_FLAG_SAFETY_ARMED
+      // base_mode comes through as either a raw bitmask int (e.g., 81) OR a
+      // pipe-joined enum string ("MAV_MODE_FLAG_SAFETY_ARMED | MAV_MODE_FLAG_..."),
+      // depending on the mavlink2rest serialization. Handle both: parse the
+      // string for SAFETY_ARMED, fall back to the bitmask if numeric.
+      let armed = false
+      let baseInt: number | null = null
+      if (typeof m.base_mode === 'string') {
+        armed = m.base_mode.includes('SAFETY_ARMED')
+      } else if (typeof m.base_mode === 'number') {
+        baseInt = m.base_mode
+        armed = (m.base_mode & 0x80) !== 0  // MAV_MODE_FLAG_SAFETY_ARMED
+      }
+      T.mode.base = baseInt
+      T.armed = armed
       T.mode.custom = Number(m.custom_mode ?? 0)
       T.mode.name = decodePx4ModeName(T.mode.custom)
       break
@@ -184,7 +195,10 @@ function handleMavlinkMessage(envelope: any) {
       break
     }
     case 'VFR_HUD': {
-      T.altitude.relative = Number.isFinite(m.alt) ? m.alt : T.altitude.relative
+      // VFR_HUD.alt is MSL per MAVLink spec — write to msl, NOT relative.
+      // (Previously this clobbered T.altitude.relative with AMSL values and
+      // fought ALTITUDE.altitude_relative at ~25 Hz, jittering the pill.)
+      T.altitude.msl = Number.isFinite(m.alt) ? m.alt : T.altitude.msl
       T.speed.ground = Number.isFinite(m.groundspeed) ? m.groundspeed : T.speed.ground
       T.speed.vertical = Number.isFinite(m.climb) ? m.climb : T.speed.vertical
       T.heading = Number.isFinite(m.heading) ? m.heading : T.heading

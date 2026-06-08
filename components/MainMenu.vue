@@ -1,35 +1,35 @@
 <template>
   <div class="relative">
     <!-- Hamburger Icon -->
-    <button 
+    <button
       @click="isOpen = !isOpen"
       class="fixed top-4 right-4 z-50 p-2 rounded-lg bg-gray-800 text-white hover:bg-gray-700 focus:outline-none"
     >
-      <svg 
-        class="w-6 h-6" 
-        fill="none" 
-        stroke="currentColor" 
+      <svg
+        class="w-6 h-6"
+        fill="none"
+        stroke="currentColor"
         viewBox="0 0 24 24"
       >
-        <path 
+        <path
           v-if="!isOpen"
-          stroke-linecap="round" 
-          stroke-linejoin="round" 
-          stroke-width="2" 
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
           d="M4 6h16M4 12h16M4 18h16"
         />
-        <path 
+        <path
           v-else
-          stroke-linecap="round" 
-          stroke-linejoin="round" 
-          stroke-width="2" 
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
           d="M6 18L18 6M6 6l12 12"
         />
       </svg>
     </button>
 
     <!-- Slide-out Menu -->
-    <div 
+    <div
       class="fixed top-0 right-0 h-full w-64 bg-gray-800 text-white transform transition-transform duration-300 ease-in-out z-40"
       :class="isOpen ? 'translate-x-0' : 'translate-x-full'"
     >
@@ -43,12 +43,6 @@
             Dashboard
           </NuxtLink>
           <button
-            class="w-full text-left py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors"
-            @click="toggleCameraRotation"
-          >
-            Rotate Camera
-          </button>
-          <button
             v-if="keyboardControlAvailable"
             class="w-full text-left py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors"
             @click="openKeyboardControl"
@@ -60,7 +54,7 @@
     </div>
 
     <!-- Backdrop -->
-    <div 
+    <div
       v-if="isOpen"
       class="fixed inset-0 bg-black bg-opacity-50 z-30"
       @click="isOpen = false"
@@ -74,14 +68,8 @@ import { ref } from 'vue'
 import { useDexiPlatform } from '~/composables/useDexiPlatform'
 
 const isOpen = ref(false)
-const cameraInverted = ref(false) // Camera displays right-side up by default
 
 const { keyboardControlEnabled: keyboardControlAvailable } = useDexiPlatform()
-
-const toggleCameraRotation = () => {
-  cameraInverted.value = !cameraInverted.value
-  isOpen.value = false
-}
 
 const emit = defineEmits(['open-keyboard-control'])
 
@@ -89,8 +77,4 @@ const openKeyboardControl = () => {
   emit('open-keyboard-control')
   isOpen.value = false
 }
-
-defineExpose({
-  cameraInverted
-})
-</script> 
+</script>
