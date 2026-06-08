@@ -9,14 +9,15 @@ import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { useTelemetry } from '~/composables/useTelemetry'
 import { useMavlinkCommand } from '~/composables/useMavlinkCommand'
 import { useStatusLog } from '~/composables/useStatusLog'
-import { useRoute } from 'vue-router'
+import { useStripVisibility } from '~/composables/useStripVisibility'
 
-const route = useRoute()
 const { telemetry, perCellVoltage, ageMs } = useTelemetry()
 const { arm, disarm, setMode } = useMavlinkCommand()
 const { totalCount: msgTotal, unseenCount: msgUnseen, latest: msgLatest, toggleLog } = useStatusLog()
 
-const visible = computed(() => route.path !== '/' && route.path !== '/index')
+// Visibility owned by composables/useStripVisibility.ts so this component
+// and layouts/default.vue agree on which routes get the strip.
+const { visible } = useStripVisibility()
 const fmt = (n: number | null, d = 1) => (n == null || !Number.isFinite(n) ? '—' : n.toFixed(d))
 const connectionAge = computed(() => (ageMs.value / 1000).toFixed(0))
 
@@ -241,12 +242,12 @@ onBeforeUnmount(() => {
         @click="onArmPillClick"
       />
 
-      <Pill label="Battery" :state="battery.state" :value="battery.label" />
+      <Pill label="Battery" :state="battery.state" :value="battery.label" value-width="13ch" />
       <Pill label="EKF" :state="ekf.state" :value="ekf.label" />
-      <Pill label="Range" :state="range.state" :value="range.label" />
-      <Pill label="Alt" :state="altitude.state" :value="altitude.label" />
-      <Pill label="Spd" :state="speed.state" :value="speed.label" />
-      <Pill label="Hdg" :state="heading.state" :value="heading.label" />
+      <Pill label="Range" :state="range.state" :value="range.label" value-width="5ch" />
+      <Pill label="Alt" :state="altitude.state" :value="altitude.label" value-width="6ch" />
+      <Pill label="Spd" :state="speed.state" :value="speed.label" value-width="7ch" />
+      <Pill label="Hdg" :state="heading.state" :value="heading.label" value-width="4ch" />
     </div>
   </div>
 </template>
@@ -257,8 +258,15 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid rgb(30 41 59);
   color: rgb(241 245 249);
   padding: 0.6rem 1.5rem;
-  position: sticky;
+  /* Fixed overlay at viewport top. Hard-coded height: 48px in
+   * layouts/default.vue assumes this stays close to that — if you change
+   * padding/font-size and the strip's natural height drifts, update both. */
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
+  height: 48px;
+  box-sizing: border-box;
   z-index: 30;
   font-size: 0.8rem;
 }

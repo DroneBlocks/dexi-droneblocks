@@ -2294,8 +2294,11 @@ onUnmounted(() => {
 .droneblocks-container {
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  width: 100vw;
+  /* Sized by the layout's flex column so the persistent ReadinessStrip stays
+   * visible. Previously this used `height: 100vh` which fought the strip's
+   * 50px and let the page settle into a state where the strip scrolled off. */
+  height: 100%;
+  width: 100%;
   margin: 0;
   padding: 0;
   overflow: hidden;
