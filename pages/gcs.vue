@@ -4,7 +4,7 @@
       <DroneGrid />
     </FlightControls>
   </div> -->
-  <div class="flex flex-col h-screen overflow-hidden">
+  <div class="flex flex-col h-full overflow-hidden">
     <FlightControls ref="flightControlsRef" class="shrink-0" />
     <div class="flex-1 min-h-0">
       <GCSLayout :flight-controls-ref="flightControlsRef" />

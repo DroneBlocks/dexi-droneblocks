@@ -4,12 +4,18 @@
 // `state` controls color: green / amber / red / gray.
 // When `clickable`, renders as a button with hover styles and emits `click`.
 
-defineProps<{
+const props = defineProps<{
   label?: string
   value: string
   state: 'green' | 'amber' | 'red' | 'gray'
   clickable?: boolean
   active?: boolean
+  /**
+   * Reserve a fixed character width for the value with tabular-nums + right
+   * alignment, so the pill doesn't jitter horizontally as the value's char
+   * count changes (e.g., `9.5m` → `10.2m`). Pass a CSS length like "6ch".
+   */
+  valueWidth?: string
 }>()
 
 defineEmits<{ click: [event: MouseEvent] }>()
@@ -25,7 +31,11 @@ defineEmits<{ click: [event: MouseEvent] }>()
   >
     <span class="dot" />
     <span v-if="label" class="pill-label">{{ label }}</span>
-    <span class="pill-value">{{ value }}</span>
+    <span
+      class="pill-value"
+      :class="{ 'pill-value-numeric': valueWidth }"
+      :style="valueWidth ? { minWidth: valueWidth } : undefined"
+    >{{ value }}</span>
     <svg
       v-if="clickable"
       class="caret"
@@ -65,6 +75,11 @@ defineEmits<{ click: [event: MouseEvent] }>()
 .pill-value {
   color: rgb(241 245 249);
   font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.pill-value-numeric {
+  display: inline-block;
+  text-align: right;
 }
 .caret {
   width: 9px;
