@@ -1,36 +1,51 @@
 <script setup lang="ts">
-// ReadinessStrip — slim, always-visible top bar that shows live FC + flight
-// readiness at a glance. Sources telemetry from mavlink2rest (via
-// useTelemetry()). Hidden on the index/landing page; visible on every other
-// route so users always know vehicle state.
-//
-// Pills (left → right):
-//   FC          connection + age
-//   Mode        flight mode + armed/disarmed
-//   Battery     % + V/cell
-//   EKF         fusion state (flow + range fusing?)
-//   Range       laser range (m)
-//   Alt         relative altitude (m)
-//   Speed       ground + climb (m/s)
-//   Heading     deg
-//
-// Each pill: color-coded green/amber/red/gray depending on its own health.
+// ReadinessStrip — slim, always-visible top bar showing FC + flight readiness.
+// Two of its pills are now interactive control surfaces:
+//   - Mode pill → opens a flight-mode dropdown (sends MAV_CMD_DO_SET_MODE)
+//   - Arm pill → 3s confirm flow (sends MAV_CMD_COMPONENT_ARM_DISARM)
+// Other pills remain read-only telemetry.
 
-import { computed } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { useTelemetry } from '~/composables/useTelemetry'
+import { useMavlinkCommand } from '~/composables/useMavlinkCommand'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
 const { telemetry, perCellVoltage, ageMs } = useTelemetry()
+const { arm, disarm, setMode } = useMavlinkCommand()
 
-// Hide on the landing page so it doesn't get in the way of the home grid.
 const visible = computed(() => route.path !== '/' && route.path !== '/index')
-
 const fmt = (n: number | null, d = 1) => (n == null || !Number.isFinite(n) ? '—' : n.toFixed(d))
 
-// ---- Pill state derivations ----
 type PillState = 'green' | 'amber' | 'red' | 'gray'
 
+// ---- Flight modes ---------------------------------------------------------
+// (main, sub) tuples for MAV_CMD_DO_SET_MODE. main=4 is AUTO with sub-modes.
+interface FlightMode { label: string; main: number; sub: number; hint?: string }
+const FLIGHT_MODES: FlightMode[] = [
+  { label: 'Manual',     main: 1, sub: 0 },
+  { label: 'Altitude',   main: 2, sub: 0 },
+  { label: 'Position',   main: 3, sub: 0, hint: 'POSCTL' },
+  { label: 'Stabilized', main: 7, sub: 0 },
+  { label: 'Hold',       main: 4, sub: 3, hint: 'LOITER' },
+  { label: 'Takeoff',    main: 4, sub: 2 },
+  { label: 'Land',       main: 4, sub: 6 },
+  { label: 'Return',     main: 4, sub: 5, hint: 'RTL' },
+  { label: 'Mission',    main: 4, sub: 4 },
+  { label: 'Offboard',   main: 6, sub: 0 },
+]
+
+const currentModeTuple = computed<{ main: number | null; sub: number | null }>(() => {
+  const custom = telemetry.value.mode.custom
+  if (custom == null) return { main: null, sub: null }
+  return { main: (custom >> 16) & 0xff, sub: (custom >> 24) & 0xff }
+})
+const isCurrentMode = (m: FlightMode) => {
+  const { main, sub } = currentModeTuple.value
+  return main === m.main && sub === m.sub
+}
+
+// ---- Pill state derivations ----------------------------------------------
 const fc = computed<{ state: PillState; label: string }>(() => {
   const t = telemetry.value
   if (!t.connected) return { state: 'red', label: t.lastHeartbeatMs === 0 ? 'no link' : `lost ${(ageMs.value / 1000).toFixed(0)}s` }
@@ -40,12 +55,15 @@ const fc = computed<{ state: PillState; label: string }>(() => {
 const mode = computed<{ state: PillState; label: string }>(() => {
   const t = telemetry.value
   if (!t.connected) return { state: 'gray', label: '—' }
-  return { state: 'green', label: t.mode.name ?? '—' }
+  const { main, sub } = currentModeTuple.value
+  const m = FLIGHT_MODES.find((x) => x.main === main && x.sub === sub)
+  return { state: 'green', label: m?.label.toUpperCase() ?? (t.mode.name ?? '—') }
 })
 
-const armed = computed<{ state: PillState; label: string }>(() => {
+const armPill = computed<{ state: PillState; label: string }>(() => {
   const t = telemetry.value
   if (!t.connected) return { state: 'gray', label: '—' }
+  if (armPhase.value === 'confirming') return { state: 'amber', label: `confirm (${armCountdown.value}s)` }
   return t.armed ? { state: 'red', label: 'ARMED' } : { state: 'green', label: 'disarmed' }
 })
 
@@ -55,7 +73,6 @@ const battery = computed<{ state: PillState; label: string }>(() => {
   const pct = t.battery.remaining
   const v = t.battery.voltage
   const cell = perCellVoltage.value
-  // Color by per-cell voltage primarily — remaining% sometimes lags
   let state: PillState = 'green'
   if (cell != null && cell < 3.3) state = 'amber'
   if (cell != null && cell < 3.1) state = 'red'
@@ -96,14 +113,108 @@ const heading = computed<{ state: PillState; label: string }>(() => {
   if (!t.connected || t.heading == null) return { state: 'gray', label: '—' }
   return { state: 'green', label: `${Math.round(t.heading)}°` }
 })
+
+// ---- Mode dropdown --------------------------------------------------------
+const modeMenuOpen = ref(false)
+const modeMenuEl = ref<HTMLElement | null>(null)
+const toggleModeMenu = () => {
+  modeMenuOpen.value = !modeMenuOpen.value
+  if (modeMenuOpen.value) cancelArmConfirm()
+}
+const selectMode = async (m: FlightMode) => {
+  modeMenuOpen.value = false
+  await setMode(m.main, m.sub)
+  console.log(`setMode → ${m.label} (main=${m.main} sub=${m.sub})`)
+}
+
+// ---- Two-step Arm ---------------------------------------------------------
+const ARM_CONFIRM_MS = 3000
+const armPhase = ref<'idle' | 'confirming'>('idle')
+const armCountdown = ref(0)
+let armConfirmTimer: ReturnType<typeof setTimeout> | null = null
+let armCountdownTimer: ReturnType<typeof setInterval> | null = null
+
+const cancelArmConfirm = () => {
+  if (armConfirmTimer) { clearTimeout(armConfirmTimer); armConfirmTimer = null }
+  if (armCountdownTimer) { clearInterval(armCountdownTimer); armCountdownTimer = null }
+  armPhase.value = 'idle'
+  armCountdown.value = 0
+}
+
+const onArmPillClick = async () => {
+  // Disarming is the safer action — single click commits.
+  if (telemetry.value.armed) {
+    cancelArmConfirm()
+    await disarm()
+    console.log('arm → DISARM')
+    return
+  }
+  // Arming → two-step confirmation
+  if (armPhase.value === 'confirming') {
+    cancelArmConfirm()
+    await arm()
+    console.log('arm → ARM (confirmed)')
+    return
+  }
+  armPhase.value = 'confirming'
+  armCountdown.value = Math.ceil(ARM_CONFIRM_MS / 1000)
+  armCountdownTimer = setInterval(() => {
+    armCountdown.value = Math.max(0, armCountdown.value - 1)
+  }, 1000)
+  armConfirmTimer = setTimeout(cancelArmConfirm, ARM_CONFIRM_MS)
+}
+
+// ---- Close menu / arm-confirm on outside click ----------------------------
+const onDocClick = (e: MouseEvent) => {
+  if (modeMenuOpen.value && modeMenuEl.value && !modeMenuEl.value.contains(e.target as Node)) {
+    modeMenuOpen.value = false
+  }
+}
+onMounted(() => document.addEventListener('click', onDocClick))
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onDocClick)
+  cancelArmConfirm()
+})
 </script>
 
 <template>
   <div v-if="visible" class="readiness-strip">
     <div class="rs-inner">
       <Pill label="FC" :state="fc.state" :value="fc.label" />
-      <Pill label="Mode" :state="mode.state" :value="mode.label" />
-      <Pill :state="armed.state" :value="armed.label" />
+
+      <!-- Mode pill + dropdown -->
+      <div ref="modeMenuEl" class="rs-anchor">
+        <Pill
+          label="Mode"
+          :state="mode.state"
+          :value="mode.label"
+          clickable
+          :active="modeMenuOpen"
+          @click="toggleModeMenu"
+        />
+        <div v-if="modeMenuOpen" class="rs-popover">
+          <button
+            v-for="m in FLIGHT_MODES"
+            :key="m.label"
+            class="rs-popover-item"
+            :class="{ 'rs-popover-item-current': isCurrentMode(m) }"
+            @click="selectMode(m)"
+          >
+            <span>{{ m.label }}</span>
+            <span v-if="m.hint" class="rs-popover-hint">{{ m.hint }}</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Arm pill with two-step confirm -->
+      <Pill
+        :state="armPill.state"
+        :value="armPill.label"
+        clickable
+        :active="armPhase === 'confirming'"
+        @click="onArmPillClick"
+      />
+
       <Pill label="Battery" :state="battery.state" :value="battery.label" />
       <Pill label="EKF" :state="ekf.state" :value="ekf.label" />
       <Pill label="Range" :state="range.state" :value="range.label" />
@@ -116,9 +227,9 @@ const heading = computed<{ state: PillState; label: string }>(() => {
 
 <style scoped>
 .readiness-strip {
-  background: rgb(15 23 42); /* slate-900 */
-  border-bottom: 1px solid rgb(30 41 59); /* slate-800 */
-  color: rgb(241 245 249); /* slate-100 */
+  background: rgb(15 23 42);
+  border-bottom: 1px solid rgb(30 41 59);
+  color: rgb(241 245 249);
   padding: 0.4rem 1rem;
   position: sticky;
   top: 0;
@@ -132,5 +243,46 @@ const heading = computed<{ state: PillState; label: string }>(() => {
   flex-wrap: wrap;
   max-width: 1400px;
   margin: 0 auto;
+}
+.rs-anchor {
+  position: relative;
+  display: inline-flex;
+}
+.rs-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 180px;
+  background: rgb(30 41 59);
+  border: 1px solid rgb(51 65 85);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  padding: 0.25rem;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+}
+.rs-popover-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  color: rgb(241 245 249);
+  font-family: ui-monospace, monospace;
+  font-size: 0.78rem;
+  cursor: pointer;
+  text-align: left;
+}
+.rs-popover-item:hover { background: rgb(51 65 85); }
+.rs-popover-item-current { background: rgba(59, 130, 246, 0.25); }
+.rs-popover-hint {
+  color: rgb(148 163 184);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 </style>
