@@ -201,11 +201,30 @@ async function getCpuStats(): Promise<CpuStats> {
   }
 }
 
-// Top N processes by CPU% — uses `top -bn2 -d 0.5`, second iteration gives a
-// real sample window (first iteration's %CPU is cumulative-since-start, useless).
+// Resolve a friendly display name from a full command line. Bare `comm` is
+// misleading for ROS nodes — every Python-based node shows as `python3` and
+// every image throttler shows as `throttle`. The full command line carries
+// the real identity in either `__node:=<name>` (set by `ros2 launch`) or
+// the script path. Resolution order:
+//   1. ROS launch arg: `... --ros-args -r __node:=foo` → "foo"
+//   2. First .py token in the command → basename without `.py`
+//   3. Fallback: basename of the first token (original behavior)
+function friendlyName(cmd: string): string {
+  if (!cmd) return cmd;
+  const rosMatch = cmd.match(/__node:=(\S+)/);
+  if (rosMatch) return rosMatch[1];
+  const pyToken = cmd.split(/\s+/).find((t) => t.endsWith(".py"));
+  if (pyToken) return pyToken.split("/").pop()!.replace(/\.py$/, "");
+  return cmd.split(/\s+/)[0].split("/").pop() || cmd;
+}
+
+// Top N processes by CPU% — uses `top -bn2 -d 0.5 -c`, second iteration gives
+// a real sample window (first iteration's %CPU is cumulative-since-start,
+// useless). `-c` shows full command line so friendlyName() has data to work
+// with. `-w512` keeps the COMMAND column from being truncated.
 interface TopProcess { pid: number; cpuPct: number; command: string }
 async function getTopProcesses(limit = 5): Promise<TopProcess[] | null> {
-  const raw = await run("top -bn2 -d 0.5 -w512 -o %CPU 2>/dev/null");
+  const raw = await run("top -bn2 -d 0.5 -w512 -o %CPU -c 2>/dev/null");
   if (!raw) return null;
   // Find the SECOND "PID  USER ..." header — its block is the real sample.
   const lines = raw.split("\n");
@@ -228,7 +247,7 @@ async function getTopProcesses(limit = 5): Promise<TopProcess[] | null> {
     const cpuPct = Number(parts[8]); // %CPU column in `top` BATCH output
     if (!Number.isFinite(pid) || !Number.isFinite(cpuPct)) continue;
     if (cpuPct < 0.1) continue;
-    out.push({ pid, cpuPct, command: parts.slice(11).join(" ") });
+    out.push({ pid, cpuPct, command: friendlyName(parts.slice(11).join(" ")) });
   }
   return out.sort((a, b) => b.cpuPct - a.cpuPct).slice(0, limit);
 }
