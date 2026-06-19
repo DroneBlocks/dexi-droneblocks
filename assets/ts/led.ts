@@ -12,6 +12,7 @@ export class LED {
             "type": "field_dropdown",
             "name": "effect",
             "options": [
+              ["aurora", "aurora"],
               ["comet", "comet"],
               ["festive", "festive"],
               ["galaxy", "galaxy"],
