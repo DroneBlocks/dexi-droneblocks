@@ -70,17 +70,32 @@ export default {
       ros: ros,
       name: this.topicName,
       messageType: 'sensor_msgs/CompressedImage',
-      throttle_rate: 200,
+      throttle_rate: 33,   // ~30 fps target (was 200 = 5 fps); camera currently
+                           // caps ~21 fps. rosbridge serializes once and shares
+                           // across viewers, so the higher rate costs ~1% CPU total.
       queue_length: 1,
+      // CBOR sends the JPEG as binary instead of base64-in-JSON (~26% less
+      // bandwidth, no base64 decode in the browser). roslib decodes the frame
+      // so message.data arrives as a byte array, not a base64 string.
+      compression: 'cbor',
     });
 
     this.imageTopic.subscribe((message) => {
-      this.imageData = `data:image/jpeg;base64,${message.data}`;
+      const blob = new Blob([new Uint8Array(message.data)], { type: 'image/jpeg' });
+      const url = URL.createObjectURL(blob);
+      // Release the previous frame's blob URL to avoid leaking one per frame.
+      if (this.imageData && this.imageData.startsWith('blob:')) {
+        URL.revokeObjectURL(this.imageData);
+      }
+      this.imageData = url;
     });
   },
   beforeDestroy() {
     if (this.imageTopic) {
       this.imageTopic.unsubscribe();
+    }
+    if (this.imageData && this.imageData.startsWith('blob:')) {
+      URL.revokeObjectURL(this.imageData);
     }
   }
 };
