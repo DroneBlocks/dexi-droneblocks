@@ -7,13 +7,30 @@
           <div class="flex items-center">
             <img src="~/assets/droneblocks_logo.svg" class="h-12" alt="DroneBlocks Logo" />
           </div>
-          <a
-            href="https://github.com/DroneBlocks/dexi-os/releases/tag/v0.20"
-            target="_blank"
-            class="px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors"
-          >
-            v0.20
-          </a>
+          <div class="flex items-center gap-2">
+            <span
+              v-if="platform"
+              class="px-2.5 py-1 bg-slate-100 text-slate-600 text-xs font-medium rounded-md"
+            >
+              {{ platform }}
+            </span>
+            <a
+              v-if="osVersion"
+              :href="`https://github.com/DroneBlocks/dexi-os/releases/tag/${osVersion}`"
+              target="_blank"
+              rel="noopener"
+              class="px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors"
+            >
+              {{ osVersion }}
+            </a>
+            <span
+              v-else
+              title="No /etc/dexi-version on this host. Older image, or the file is not mounted into the container."
+              class="px-4 py-2 bg-slate-100 text-slate-500 text-sm font-medium rounded-lg"
+            >
+              version unknown
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -219,6 +236,21 @@
 const hostname = process.client ? window.location.hostname : '192.168.4.1'
 const nodeRedUrl = useRuntimeConfig().public.nodeRedUrl || `http://${hostname}:1880`
 const vscodeUrl = useRuntimeConfig().public.vscodeUrl || `http://${hostname}:9999`
+
+// Image identity comes from the host, never from a literal in this file. The
+// badge used to be hardcoded, so it read "v0.20" on every image built since.
+const osVersion = ref(null)
+const platform = ref(null)
+
+onMounted(async () => {
+  try {
+    const data = await $fetch('/api/version')
+    osVersion.value = data.os
+    platform.value = data.platform
+  } catch {
+    // Leave both null; the header falls back to "version unknown".
+  }
+})
 </script>
 
 <style scoped>
