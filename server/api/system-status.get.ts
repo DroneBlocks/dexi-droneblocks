@@ -160,13 +160,25 @@ async function getSavedConnections(): Promise<SavedConnection[]> {
   return connections;
 }
 
-// /proc/stat CPU usage — aggregate + per-core. Reads twice with a short delay
-// and computes the idle-time delta ratio per cpu line. First "cpu " line is
-// aggregate; "cpu0..cpuN" follow. Same sampling pattern as `top` / `vmstat`.
+// /proc/stat CPU usage — aggregate + per-core, from the idle-time delta ratio
+// per cpu line. First "cpu " line is aggregate; "cpu0..cpuN" follow.
+//
+// The window spans the gap between requests rather than sitting inside one.
+// This handler spawns top, two nmcli calls, hostname and iw in the same
+// Promise.all, so an in-request window measures the handler's own cost.
+// Measured on an ARK CM4 against a true 62%: nothing spawned 61.3%, top only
+// 66.5%, nmcli+hostname+iw 71.5%, all of them 78.1%. At the old 100 ms the
+// quantization on a 100 Hz clock made it worse still — ten consecutive reads
+// ranged 31% to 85% under identical load, pinning cores at 100%.
+//
+// Keeping the previous reading here gives a ~5 s window (the page's poll
+// interval), outside the burst, at no latency cost. The first request after a
+// restart has nothing to diff against and falls back to a 500 ms window.
 interface CpuStats {
   aggregate: number | null;
   perCore: number[] | null;
 }
+let cpuPrev: { total: number; idle: number }[] | null = null;
 async function getCpuStats(): Promise<CpuStats> {
   const read = async () => {
     const lines = (await readFile("/proc/stat", "utf-8"))
@@ -187,15 +199,26 @@ async function getCpuStats(): Promise<CpuStats> {
     const dIdle = after.idle - before.idle;
     return dTotal > 0 ? Math.max(0, Math.min(100, 100 * (1 - dIdle / dTotal))) : 0;
   };
+  const pair = (
+    a: { total: number; idle: number }[],
+    b: { total: number; idle: number }[]
+  ): CpuStats => ({
+    aggregate: usagePct(a[0], b[0]),
+    perCore: a.slice(1).map((ac, i) => usagePct(ac, b[i + 1])),
+  });
   try {
-    const a = await read();
-    await new Promise((r) => setTimeout(r, 100));
+    const now = await read();
+    if (now.length === 0) return { aggregate: null, perCore: null };
+    const prev = cpuPrev;
+    cpuPrev = now;
+    if (prev && prev.length === now.length) return pair(prev, now);
+    // First request since start: no prior sample, so fall back to a window
+    // inside this request. Wide enough to beat the 100 Hz quantization.
+    await new Promise((r) => setTimeout(r, 500));
     const b = await read();
-    if (a.length === 0 || a.length !== b.length) return { aggregate: null, perCore: null };
-    return {
-      aggregate: usagePct(a[0], b[0]),
-      perCore: a.slice(1).map((ac, i) => usagePct(ac, b[i + 1])),
-    };
+    if (b.length !== now.length) return { aggregate: null, perCore: null };
+    cpuPrev = b;
+    return pair(now, b);
   } catch {
     return { aggregate: null, perCore: null };
   }
