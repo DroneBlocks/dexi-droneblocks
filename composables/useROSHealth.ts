@@ -47,12 +47,13 @@ export interface ROSHealth {
 // advertised). Choose high-rate topics so a 2 s window is enough signal.
 const PROBE_TOPICS = [
   '/fmu/out/vehicle_attitude',
-  '/fmu/out/battery_status_v1',
-  '/fmu/out/vehicle_local_position_v1',
+  '/fmu/out/battery_status',
+  '/fmu/out/vehicle_local_position',
   '/fmu/out/estimator_status_flags',
 ] as const
 
 const PROBE_WINDOW_MS = 2000
+const PROBE_THROTTLE_MS = 100
 const REFRESH_INTERVAL_MS = 5000
 
 // ---- Module-level singletons ----
@@ -133,7 +134,15 @@ async function runProbes() {
     PROBE_TOPICS.map(async (name) => {
       const type = await getTopicType(name)
       if (!type) return
-      const t = new ROSLIB.Topic({ ros: ros!, name, messageType: type, throttle_rate: 0 })
+      // Throttled server-side. The probe only needs to know whether anything
+      // arrives, and these topics run at ~100 Hz: unthrottled, a single 2 s
+      // window pushed ~560 messages to the browser to compute four booleans.
+      // queue_length 1 makes rosbridge drop rather than buffer between sends.
+      // Note `rate` below is therefore the throttled rate, not the true one.
+      const t = new ROSLIB.Topic({
+        ros: ros!, name, messageType: type,
+        throttle_rate: PROBE_THROTTLE_MS, queue_length: 1,
+      })
       counts[name] = 0
       t.subscribe(() => {
         counts[name] = (counts[name] ?? 0) + 1
