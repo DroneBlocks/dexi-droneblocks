@@ -170,6 +170,11 @@ const options = {
           </value>
         </block>
         <block type="nav_takeoff_after">
+          <value name="ALTITUDE">
+            <shadow type="math_number">
+              <field name="NUM">2</field>
+            </shadow>
+          </value>
           <value name="DELAY">
             <shadow type="math_number">
               <field name="NUM">5</field>
@@ -177,6 +182,11 @@ const options = {
           </value>
         </block>
         <block type="nav_takeoff_and_wait">
+          <value name="ALTITUDE">
+            <shadow type="math_number">
+              <field name="NUM">2</field>
+            </shadow>
+          </value>
           <value name="WAIT_TIME">
             <shadow type="math_number">
               <field name="NUM">5</field>
@@ -854,6 +864,12 @@ const getInputValue = (block: any, inputName: string, defaultValue: number): num
   return defaultValue;
 };
 
+// Altitude from a takeoff block's ALTITUDE input and UNIT dropdown, in meters.
+const getAltitudeMeters = (block: any): number => {
+  const altitude = getInputValue(block, 'ALTITUDE', 2.0);
+  return block.getFieldValue('UNIT') === 'ft' ? altitude * 0.3048 : altitude;
+};
+
 const runMission = async () => {
   if (!connected.value || !blocklyCommandService.value) {
     displayNotification('Please connect to ROS first!', 'error');
@@ -961,9 +977,10 @@ const runMission = async () => {
               delay = parseFloat(targetBlock.getFieldValue('NUM'));
             }
           }
-          console.log(`⏱️ Waiting ${delay} seconds before takeoff...`);
+          const altitude = getAltitudeMeters(block);
+          console.log(`⏱️ Waiting ${delay} seconds before takeoff to ${altitude} m...`);
           await new Promise(resolve => setTimeout(resolve, delay * 1000));
-          await executeCommandWithService('offboard_takeoff', 2.0, 30);
+          await executeCommandWithService('offboard_takeoff', altitude, 30);
         } else if (blockType === 'nav_takeoff_and_wait') {
           const waitInput = block.getInput('WAIT_TIME');
           let waitTime = 5;
@@ -973,7 +990,7 @@ const runMission = async () => {
               waitTime = parseFloat(targetBlock.getFieldValue('NUM'));
             }
           }
-          await executeCommandWithService('offboard_takeoff', 2.0, 30);
+          await executeCommandWithService('offboard_takeoff', getAltitudeMeters(block), 30);
           console.log(`⏱️ Waiting ${waitTime} seconds after takeoff...`);
           await new Promise(resolve => setTimeout(resolve, waitTime * 1000));
         } else if (blockType === 'nav_land_after') {

@@ -267,8 +267,21 @@ export class Navigation {
       },
       {
         "type": "nav_takeoff_after",
-        "message0": "takeoff after %1 seconds",
+        "message0": "takeoff to %1 %2 after %3 seconds",
         "args0": [
+          {
+            "type": "input_value",
+            "name": "ALTITUDE",
+            "check": "Number"
+          },
+          {
+            "type": "field_dropdown",
+            "name": "UNIT",
+            "options": [
+              ["m", "m"],
+              ["ft", "ft"]
+            ]
+          },
           {
             "type": "input_value",
             "name": "DELAY",
@@ -278,13 +291,26 @@ export class Navigation {
         "colour": "#4CAF50",
         "previousStatement": null,
         "nextStatement": null,
-        "tooltip": "Wait specified seconds then takeoff",
+        "tooltip": "Wait the specified seconds, then takeoff to the specified altitude",
         "helpUrl": ""
       },
       {
         "type": "nav_takeoff_and_wait",
-        "message0": "takeoff and wait %1 seconds",
+        "message0": "takeoff to %1 %2 and wait %3 seconds",
         "args0": [
+          {
+            "type": "input_value",
+            "name": "ALTITUDE",
+            "check": "Number"
+          },
+          {
+            "type": "field_dropdown",
+            "name": "UNIT",
+            "options": [
+              ["m", "m"],
+              ["ft", "ft"]
+            ]
+          },
           {
             "type": "input_value",
             "name": "WAIT_TIME",
@@ -294,7 +320,7 @@ export class Navigation {
         "colour": "#4CAF50",
         "previousStatement": null,
         "nextStatement": null,
-        "tooltip": "Takeoff then wait specified seconds",
+        "tooltip": "Takeoff to the specified altitude, then wait the specified seconds",
         "helpUrl": ""
       },
       {
@@ -598,26 +624,32 @@ await new Promise(resolve => setTimeout(resolve, ${duration} * 1000));
 
     javascriptGenerator.forBlock['nav_takeoff_after'] = function(block: Blockly.Block, generator: JavascriptGenerator) {
       const delay = generator.valueToCode(block, 'DELAY', javascriptGenerator.ORDER_ATOMIC) || '5';
+      const altitude = generator.valueToCode(block, 'ALTITUDE', javascriptGenerator.ORDER_ATOMIC) || '2.0';
+      const unit = block.getFieldValue('UNIT') || 'm';
+      const altitudeInMeters = convertToMeters(altitude, unit);
       return `
-// Wait ${delay} seconds then takeoff
+// Wait ${delay} seconds then takeoff to ${altitude} ${unit}
 await new Promise(resolve => setTimeout(resolve, ${delay} * 1000));
 offboardCommand.publish({
   command: 'offboard_takeoff',
-  distance_or_degrees: 2.0
+  distance_or_degrees: ${altitudeInMeters}
 });
-await new Promise(resolve => setTimeout(resolve, 4000)); // Wait for takeoff
+await new Promise(resolve => setTimeout(resolve, ${altitudeInMeters} * 2000)); // Wait for takeoff
 `;
     }
 
     javascriptGenerator.forBlock['nav_takeoff_and_wait'] = function(block: Blockly.Block, generator: JavascriptGenerator) {
       const waitTime = generator.valueToCode(block, 'WAIT_TIME', javascriptGenerator.ORDER_ATOMIC) || '5';
+      const altitude = generator.valueToCode(block, 'ALTITUDE', javascriptGenerator.ORDER_ATOMIC) || '2.0';
+      const unit = block.getFieldValue('UNIT') || 'm';
+      const altitudeInMeters = convertToMeters(altitude, unit);
       return `
-// Takeoff and wait ${waitTime} seconds
+// Takeoff to ${altitude} ${unit} and wait ${waitTime} seconds
 offboardCommand.publish({
   command: 'offboard_takeoff',
-  distance_or_degrees: 2.0
+  distance_or_degrees: ${altitudeInMeters}
 });
-await new Promise(resolve => setTimeout(resolve, 4000)); // Wait for takeoff
+await new Promise(resolve => setTimeout(resolve, ${altitudeInMeters} * 2000)); // Wait for takeoff
 await new Promise(resolve => setTimeout(resolve, ${waitTime} * 1000)); // Additional wait
 `;
     }
