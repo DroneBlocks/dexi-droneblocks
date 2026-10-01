@@ -23,24 +23,6 @@ export class Navigation {
         "helpUrl": ""
       },
       {
-        "type": "nav_start_offboard_heartbeat",
-        "message0": "start offboard heartbeat",
-        "colour": "#6366F1",
-        "previousStatement": null,
-        "nextStatement": null,
-        "tooltip": "Start sending offboard control signals",
-        "helpUrl": ""
-      },
-      {
-        "type": "nav_stop_offboard_heartbeat",
-        "message0": "stop offboard heartbeat",
-        "colour": "#6366F1",
-        "previousStatement": null,
-        "nextStatement": null,
-        "tooltip": "Stop sending offboard control signals",
-        "helpUrl": ""
-      },
-      {
         "type": "nav_switch_offboard_mode",
         "message0": "switch to offboard mode",
         "colour": "#6366F1",
@@ -448,28 +430,6 @@ offboardCommand.publish({
   distance_or_degrees: 0.0
 });
 await new Promise(resolve => setTimeout(resolve, 1000)); // Wait for disarming
-`;
-    }
-
-    javascriptGenerator.forBlock['nav_start_offboard_heartbeat'] = function(block: Blockly.Block, generator: JavascriptGenerator) {
-      return `
-// Start offboard heartbeat
-offboardCommand.publish({
-  command: 'start_offboard_heartbeat',
-  distance_or_degrees: 0.0
-});
-await new Promise(resolve => setTimeout(resolve, 500)); // Wait for heartbeat to start
-`;
-    }
-
-    javascriptGenerator.forBlock['nav_stop_offboard_heartbeat'] = function(block: Blockly.Block, generator: JavascriptGenerator) {
-      return `
-// Stop offboard heartbeat
-offboardCommand.publish({
-  command: 'stop_offboard_heartbeat',
-  distance_or_degrees: 0.0
-});
-await new Promise(resolve => setTimeout(resolve, 500)); // Wait for heartbeat to stop
 `;
     }
 
