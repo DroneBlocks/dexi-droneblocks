@@ -116,8 +116,6 @@ const blockGenerators: Record<string, BlockGenerator> = {
   // Setup blocks
   nav_arm: (block, indentLevel) => indent(`mission.execute_command('arm')`, indentLevel),
   nav_disarm: (block, indentLevel) => indent(`mission.execute_command('disarm')`, indentLevel),
-  nav_start_offboard_heartbeat: (block, indentLevel) => indent(`mission.execute_command('start_offboard_heartbeat')`, indentLevel),
-  nav_stop_offboard_heartbeat: (block, indentLevel) => indent(`mission.execute_command('stop_offboard_heartbeat')`, indentLevel),
   nav_switch_offboard_mode: (block, indentLevel) => indent(`mission.execute_command('switch_offboard_mode')`, indentLevel),
   nav_switch_hold_mode: (block, indentLevel) => indent(`mission.execute_command('switch_hold_mode')`, indentLevel),
 

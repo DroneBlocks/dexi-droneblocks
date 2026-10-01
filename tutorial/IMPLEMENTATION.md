@@ -76,7 +76,7 @@ Beginner Level:
 ├─ 2. Arming Your Drone (5min)
 │   └─ 5 steps: Safety, finding blocks, executing
 ├─ 3. Offboard Mode & Heartbeat (7min)
-│   └─ 7 steps: Understanding offboard, heartbeat, sequence
+│   └─ 5 steps: Understanding offboard, heartbeat, arm + takeoff
 ├─ 4. First Flight - Takeoff (5min)
 │   └─ 6 steps: Takeoff block, altitude, execution
 └─ 5. LED Control (4min)

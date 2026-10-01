@@ -158,8 +158,6 @@ const options = {
     <category name="Setup" colour="#6366F1">
         <block type="nav_arm"></block>
         <block type="nav_disarm"></block>
-        <block type="nav_start_offboard_heartbeat"></block>
-        <block type="nav_stop_offboard_heartbeat"></block>
         <block type="nav_switch_offboard_mode"></block>
         <block type="nav_switch_hold_mode"></block>
       </category>
@@ -898,10 +896,6 @@ const runMission = async () => {
           await executeCommandWithService('arm', 0, 10);
         } else if (blockType === 'nav_disarm') {
           await executeCommandWithService('disarm', 0, 10);
-        } else if (blockType === 'nav_start_offboard_heartbeat') {
-          await executeCommandWithService('start_offboard_heartbeat', 0, 5);
-        } else if (blockType === 'nav_stop_offboard_heartbeat') {
-          await executeCommandWithService('stop_offboard_heartbeat', 0, 5);
         } else if (blockType === 'nav_takeoff') {
           const altitude = getInputValue(block, 'ALTITUDE', 2.0);
           await executeCommandWithService('offboard_takeoff', altitude, 30);
@@ -1799,7 +1793,6 @@ const mapScannedBlockType = (type: string): string | null => {
     'wait': 'nav_wait',
     'arm': 'nav_arm',
     'disarm': 'nav_disarm',
-    'start_offboard_heartbeat': 'nav_start_offboard_heartbeat',
     'switch_offboard_mode': 'nav_switch_offboard_mode',
   };
   return mapping[type.toLowerCase()] || null;

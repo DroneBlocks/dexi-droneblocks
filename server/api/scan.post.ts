@@ -12,7 +12,7 @@ Your task is to analyze photos of physical laser-cut wooden Blockly blocks and i
 - yaw_left, yaw_right (with degrees value)
 - wait (with seconds value)
 - arm, disarm
-- start_offboard_heartbeat, switch_offboard_mode
+- switch_offboard_mode
 
 ## Your Response Format
 Return a JSON object with:
