@@ -170,6 +170,11 @@ const options = {
           </value>
         </block>
         <block type="nav_takeoff_after">
+          <value name="ALTITUDE">
+            <shadow type="math_number">
+              <field name="NUM">2</field>
+            </shadow>
+          </value>
           <value name="DELAY">
             <shadow type="math_number">
               <field name="NUM">5</field>
@@ -177,6 +182,11 @@ const options = {
           </value>
         </block>
         <block type="nav_takeoff_and_wait">
+          <value name="ALTITUDE">
+            <shadow type="math_number">
+              <field name="NUM">2</field>
+            </shadow>
+          </value>
           <value name="WAIT_TIME">
             <shadow type="math_number">
               <field name="NUM">5</field>
@@ -854,6 +864,12 @@ const getInputValue = (block: any, inputName: string, defaultValue: number): num
   return defaultValue;
 };
 
+// A distance or altitude input in meters, honoring the block's UNIT dropdown.
+const getMeters = (block: any, inputName: string, defaultValue: number): number => {
+  const value = getInputValue(block, inputName, defaultValue);
+  return block.getFieldValue('UNIT') === 'ft' ? value * 0.3048 : value;
+};
+
 const runMission = async () => {
   if (!connected.value || !blocklyCommandService.value) {
     displayNotification('Please connect to ROS first!', 'error');
@@ -897,7 +913,7 @@ const runMission = async () => {
         } else if (blockType === 'nav_disarm') {
           await executeCommandWithService('disarm', 0, 10);
         } else if (blockType === 'nav_takeoff') {
-          const altitude = getInputValue(block, 'ALTITUDE', 2.0);
+          const altitude = getMeters(block, 'ALTITUDE', 2.0);
           await executeCommandWithService('offboard_takeoff', altitude, 30);
         } else if (blockType === 'nav_land') {
           await executeCommandWithService('land', 0, 30);
@@ -906,22 +922,22 @@ const runMission = async () => {
         } else if (blockType === 'nav_switch_hold_mode') {
           await executeCommandWithService('switch_hold_mode', 0, 5);
         } else if (blockType === 'nav_fly_forward') {
-          const distance = getInputValue(block, 'DISTANCE', 1.0);
+          const distance = getMeters(block, 'DISTANCE', 1.0);
           await executeCommandWithService('fly_forward', distance, 30);
         } else if (blockType === 'nav_fly_backward') {
-          const distance = getInputValue(block, 'DISTANCE', 1.0);
+          const distance = getMeters(block, 'DISTANCE', 1.0);
           await executeCommandWithService('fly_backward', distance, 30);
         } else if (blockType === 'nav_fly_left') {
-          const distance = getInputValue(block, 'DISTANCE', 1.0);
+          const distance = getMeters(block, 'DISTANCE', 1.0);
           await executeCommandWithService('fly_left', distance, 30);
         } else if (blockType === 'nav_fly_right') {
-          const distance = getInputValue(block, 'DISTANCE', 1.0);
+          const distance = getMeters(block, 'DISTANCE', 1.0);
           await executeCommandWithService('fly_right', distance, 30);
         } else if (blockType === 'nav_fly_up') {
-          const distance = getInputValue(block, 'DISTANCE', 1.0);
+          const distance = getMeters(block, 'DISTANCE', 1.0);
           await executeCommandWithService('fly_up', distance, 30);
         } else if (blockType === 'nav_fly_down') {
-          const distance = getInputValue(block, 'DISTANCE', 1.0);
+          const distance = getMeters(block, 'DISTANCE', 1.0);
           await executeCommandWithService('fly_down', distance, 30);
         } else if (blockType === 'nav_yaw_left') {
           const degrees = getInputValue(block, 'DEGREES', 90);
@@ -961,9 +977,10 @@ const runMission = async () => {
               delay = parseFloat(targetBlock.getFieldValue('NUM'));
             }
           }
-          console.log(`⏱️ Waiting ${delay} seconds before takeoff...`);
+          const altitude = getMeters(block, 'ALTITUDE', 2.0);
+          console.log(`⏱️ Waiting ${delay} seconds before takeoff to ${altitude} m...`);
           await new Promise(resolve => setTimeout(resolve, delay * 1000));
-          await executeCommandWithService('offboard_takeoff', 2.0, 30);
+          await executeCommandWithService('offboard_takeoff', altitude, 30);
         } else if (blockType === 'nav_takeoff_and_wait') {
           const waitInput = block.getInput('WAIT_TIME');
           let waitTime = 5;
@@ -973,7 +990,7 @@ const runMission = async () => {
               waitTime = parseFloat(targetBlock.getFieldValue('NUM'));
             }
           }
-          await executeCommandWithService('offboard_takeoff', 2.0, 30);
+          await executeCommandWithService('offboard_takeoff', getMeters(block, 'ALTITUDE', 2.0), 30);
           console.log(`⏱️ Waiting ${waitTime} seconds after takeoff...`);
           await new Promise(resolve => setTimeout(resolve, waitTime * 1000));
         } else if (blockType === 'nav_land_after') {
@@ -1301,22 +1318,22 @@ const runMission = async () => {
                   console.log(`⏱️ Waiting ${duration} seconds...`);
                   await new Promise(resolve => setTimeout(resolve, duration * 1000));
                 } else if (innerBlockType === 'nav_fly_forward') {
-                  const distance = getInputValue(currentBlock, 'DISTANCE', 1.0);
+                  const distance = getMeters(currentBlock, 'DISTANCE', 1.0);
                   await executeCommandWithService('fly_forward', distance, 30);
                 } else if (innerBlockType === 'nav_fly_backward') {
-                  const distance = getInputValue(currentBlock, 'DISTANCE', 1.0);
+                  const distance = getMeters(currentBlock, 'DISTANCE', 1.0);
                   await executeCommandWithService('fly_backward', distance, 30);
                 } else if (innerBlockType === 'nav_fly_left') {
-                  const distance = getInputValue(currentBlock, 'DISTANCE', 1.0);
+                  const distance = getMeters(currentBlock, 'DISTANCE', 1.0);
                   await executeCommandWithService('fly_left', distance, 30);
                 } else if (innerBlockType === 'nav_fly_right') {
-                  const distance = getInputValue(currentBlock, 'DISTANCE', 1.0);
+                  const distance = getMeters(currentBlock, 'DISTANCE', 1.0);
                   await executeCommandWithService('fly_right', distance, 30);
                 } else if (innerBlockType === 'nav_fly_up') {
-                  const distance = getInputValue(currentBlock, 'DISTANCE', 1.0);
+                  const distance = getMeters(currentBlock, 'DISTANCE', 1.0);
                   await executeCommandWithService('fly_up', distance, 30);
                 } else if (innerBlockType === 'nav_fly_down') {
-                  const distance = getInputValue(currentBlock, 'DISTANCE', 1.0);
+                  const distance = getMeters(currentBlock, 'DISTANCE', 1.0);
                   await executeCommandWithService('fly_down', distance, 30);
                 } else if (innerBlockType === 'nav_yaw_left') {
                   const degrees = getInputValue(currentBlock, 'DEGREES', 90);
@@ -1325,7 +1342,7 @@ const runMission = async () => {
                   const degrees = getInputValue(currentBlock, 'DEGREES', 90);
                   await executeCommandWithService('yaw_right', degrees, 10);
                 } else if (innerBlockType === 'nav_takeoff') {
-                  const altitude = getInputValue(currentBlock, 'ALTITUDE', 2.0);
+                  const altitude = getMeters(currentBlock, 'ALTITUDE', 2.0);
                   await executeCommandWithService('takeoff', altitude, 30);
                 } else if (innerBlockType === 'nav_land') {
                   await executeCommandWithService('land', 0, 30);

@@ -129,11 +129,19 @@ const blockGenerators: Record<string, BlockGenerator> = {
   },
   nav_takeoff_after: (block, indentLevel) => {
     const delay = getInputValue(block, 'DELAY', '5');
-    return indent(`time.sleep(${delay})`, indentLevel) + '\n' + indent(`mission.execute_command('offboard_takeoff', 2.0)`, indentLevel);
+    const altitude = getInputValue(block, 'ALTITUDE', '2.0');
+    const unit = block.getFieldValue('UNIT') || 'm';
+    const altitudeExpr = convertToMeters(altitude, unit);
+    const comment = unit !== 'm' ? `  # ${altitude} ${unit}` : '';
+    return indent(`time.sleep(${delay})`, indentLevel) + '\n' + indent(`mission.execute_command('offboard_takeoff', ${altitudeExpr})${comment}`, indentLevel);
   },
   nav_takeoff_and_wait: (block, indentLevel) => {
     const waitTime = getInputValue(block, 'WAIT_TIME', '5');
-    return indent(`mission.execute_command('offboard_takeoff', 2.0)`, indentLevel) + '\n' + indent(`time.sleep(${waitTime})`, indentLevel);
+    const altitude = getInputValue(block, 'ALTITUDE', '2.0');
+    const unit = block.getFieldValue('UNIT') || 'm';
+    const altitudeExpr = convertToMeters(altitude, unit);
+    const comment = unit !== 'm' ? `  # ${altitude} ${unit}` : '';
+    return indent(`mission.execute_command('offboard_takeoff', ${altitudeExpr})${comment}`, indentLevel) + '\n' + indent(`time.sleep(${waitTime})`, indentLevel);
   },
 
   // Land blocks
