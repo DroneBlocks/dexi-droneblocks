@@ -117,7 +117,16 @@ let consumerCount = 0
 function getMavlinkBaseUrl(): { ws: string; http: string } {
   if (typeof window === 'undefined') return { ws: '', http: '' }
   const params = new URLSearchParams(window.location.search)
-  const host = params.get('mavlinkHost') || window.location.hostname
+  // Telemetry follows the aircraft, not the page: when the rosbridge URL is
+  // overridden (NUXT_PUBLIC_ROSBRIDGE_URL pointing at a real DEXI), read
+  // mavlink2rest from that same host, otherwise the header would show the
+  // SITL running on the machine that serves the page.
+  let rosbridgeHost = ''
+  try {
+    const configured = useRuntimeConfig().public.rosbridgeUrl
+    if (configured) rosbridgeHost = new URL(configured).hostname
+  } catch { /* no override or not a URL */ }
+  const host = params.get('mavlinkHost') || rosbridgeHost || window.location.hostname
   const isSecure = window.location.protocol === 'https:'
   const wsProtocol = isSecure ? 'wss:' : 'ws:'
   const httpProtocol = isSecure ? 'https:' : 'http:'
