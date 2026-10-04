@@ -1,5 +1,15 @@
 name: Claude Assistant
 
+# Responds to @claude mentions in issues, issue comments and PR reviews, or
+# to an issue labeled / assigned "claude". The repo is public, so the job is
+# gated to trusted authors (OWNER / MEMBER / COLLABORATOR). CONTRIBUTOR is
+# included because GitHub reports an org member with private membership as
+# CONTRIBUTOR in the webhook payload.
+#
+# The job only starts when a trigger is actually present. Without the gate
+# every plain issue open runs the action, which fails before it can check
+# the trigger phrase if the Claude GitHub App is not installed on the repo.
+
 permissions:
   contents: write
   issues: write
@@ -16,8 +26,30 @@ on:
   pull_request_review:
     types: [submitted]
 
+concurrency:
+  group: claude-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: false
+
 jobs:
   claude-response:
+    if: |
+      (
+        github.event_name == 'issues'
+        && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR","CONTRIBUTOR"]'), github.event.issue.author_association)
+        && (
+          (github.event.action == 'opened' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude') || contains(github.event.issue.labels.*.name, 'claude')))
+          || (github.event.action == 'labeled' && github.event.label.name == 'claude')
+          || (github.event.action == 'assigned' && github.event.assignee.login == 'claude')
+        )
+      ) || (
+        (github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment')
+        && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR","CONTRIBUTOR"]'), github.event.comment.author_association)
+        && contains(github.event.comment.body, '@claude')
+      ) || (
+        github.event_name == 'pull_request_review'
+        && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR","CONTRIBUTOR"]'), github.event.review.author_association)
+        && contains(github.event.review.body, '@claude')
+      )
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
