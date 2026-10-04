@@ -37,9 +37,10 @@ const showQRCode = ref(false);
 const scanPageUrl = ref('');
 
 // View mode: 'simulator' or 'drone'
-// 'simulator' = Unity sim iframe, 'corridor' = three.js AprilTag corridor iframe,
+// 'simulator' = the three.js environment viewer (droneblocks-web-sim), which carries its
+// own environment picker; the GCS only embeds it.
 // 'field' = the same page showing the AVR 2026 court, 'drone' = camera feed
-const viewMode = ref<'simulator' | 'drone' | 'corridor' | 'field'>('simulator');
+const viewMode = ref<'simulator' | 'drone'>('simulator');
 
 // Camera overlay state
 const cameraPosition = ref({ x: 0, y: 0 });
@@ -137,47 +138,16 @@ const nedHeading = ref<number>(0);
 // Without this, Unity falls back to constructing wss://{iframe-hostname}:9090,
 // which fails on tunneled deployments because Cloudflare doesn't proxy 9090
 // on the sim-* subdomain.
-const unityUrl = ref('');
-const corridorSimUrl = ref('');
-const fieldSimUrl = ref('');
-type SimEnvironment = { id: string; title: string; description?: string; params?: Record<string, string>; options?: Record<string, { id: string; title: string }[]> };
-const simEnvironments = ref<SimEnvironment[]>([
-  { id: 'avr2026', title: 'AVR 2026 Field', params: { scene: 'avr2026' }, options: { route: [{ id: 'dexi5', title: 'DEXI 5 route' }, { id: 'dexi10', title: 'DEXI 10 route' }] } },
-  { id: 'corridor', title: 'Tag Corridor', params: { scene: 'corridor' } },
-]);
-const simEnvVersion = ref('');
-const simEnv = ref<string>((process.client && localStorage.getItem('droneblocks_sim_env')) || 'avr2026');
-const simEnvOpts = ref<Record<string, string>>(process.client ? JSON.parse(localStorage.getItem('droneblocks_sim_env_opts') || '{}') : {});
-const envSimUrl = computed(() => {
-  const env = simEnvironments.value.find(e => e.id === simEnv.value) || simEnvironments.value[0];
-  const params = new URLSearchParams({ ...(env?.params || {}), ...simEnvOpts.value });
-  return corridorSimUrl.value ? `${corridorSimUrl.value}&${params.toString()}` : '';
-});
-const currentEnvTitle = computed(() => {
-  const env = simEnvironments.value.find(e => e.id === simEnv.value);
-  const route = env?.options?.route?.find(r => r.id === simEnvOpts.value.route);
-  return env ? env.title + (route ? ` · ${route.title}` : '') : '';
-});
+const simViewerUrl = ref('');
 if (process.client) {
   const hostname = window.location.hostname;
   const port = window.location.port;
-  const baseSimUrl = useRuntimeConfig().public.simUrl || `http://${hostname}:1337`;
+  // The environment viewer (droneblocks-web-sim, served by the sim-env image on 1337, where
+  // the Unity player used to be). No scene in the URL: the viewer applies the environment
+  // the user last picked in its own drawer, so the GCS only embeds it.
+  const baseSimUrl = (useRuntimeConfig().public.simUrl || `http://${hostname}:1337`).replace(/\/$/, '');
   const rosbridgeUrl = useRuntimeConfig().public.rosbridgeUrl || `ws://${hostname}:9090`;
-  unityUrl.value = `${baseSimUrl}?rosbridge=${encodeURIComponent(rosbridgeUrl)}`;
-  // three.js AprilTag corridor (droneblocks-web-sim/viewer-corridor.html), served by the corridor-sim container
-  const baseCorridorUrl = useRuntimeConfig().public.corridorSimUrl || `http://${hostname}:8000/viewer-corridor.html`;
-  corridorSimUrl.value = `${baseCorridorUrl}?autoconnect=1&ws=${encodeURIComponent(rosbridgeUrl)}`;
-  fieldSimUrl.value = `${corridorSimUrl.value}&scene=avr2026`;
-  // The environments the court image offers (environments.json next to the viewer), with
-  // per-environment options such as the AVR route. Falls back to the two built-ins.
-  const manifestUrl = baseCorridorUrl.replace(/[^/]*$/, 'environments.json');
-  fetch(manifestUrl).then(r => r.ok ? r.json() : null).then((m) => {
-    if (m && Array.isArray(m.environments) && m.environments.length) {
-      simEnvironments.value = m.environments;
-      simEnvVersion.value = m.version || '';
-      if (!m.environments.some((e: any) => e.id === simEnv.value)) simEnv.value = m.default || m.environments[0].id;
-    }
-  }).catch(() => {});
+  simViewerUrl.value = `${baseSimUrl}/viewer-corridor.html?autoconnect=1&ws=${encodeURIComponent(rosbridgeUrl)}`;
   scanPageUrl.value = `${window.location.protocol}//${hostname}${port ? ':' + port : ''}/scan`;
 }
 
@@ -795,7 +765,7 @@ const connectToROS = () => {
       // Query platform params and auto-set view mode
       loadPlatformParams(ros.value as ROSLIB.Ros).then(() => {
         // A saved corridor view survives reconnects on a sim; anything else follows the platform
-        const autoMode = isSim.value ? ((viewMode.value === 'corridor' || viewMode.value === 'field') ? viewMode.value : 'simulator') : 'drone';
+        const autoMode = isSim.value ? 'simulator' : 'drone';
         viewMode.value = autoMode;
         localStorage.setItem('droneblocks_view_mode', autoMode);
         console.log(`View mode auto-set to '${autoMode}' from platform param`);
@@ -2093,17 +2063,6 @@ const toggleViewMode = () => {
   localStorage.setItem('droneblocks_view_mode', viewMode.value);
 };
 
-// Pick an environment (and an option such as the AVR route); the court iframe follows envSimUrl.
-const showEnvironment = (id: string, opts: Record<string, string> = {}) => {
-  simEnv.value = id;
-  simEnvOpts.value = opts;
-  localStorage.setItem('droneblocks_sim_env', id);
-  localStorage.setItem('droneblocks_sim_env_opts', JSON.stringify(opts));
-  viewMode.value = 'field';
-  localStorage.setItem('droneblocks_view_mode', viewMode.value);
-};
-const showCorridorSim = () => showEnvironment('corridor');
-const showFieldSim = () => showEnvironment('avr2026', { route: 'dexi5' });
 
 // Camera overlay functions
 const toggleCameraSize = () => {
@@ -2208,7 +2167,7 @@ const loadDemoFromQuery = () => {
 onMounted(() => {
   // Load saved view mode
   const savedViewMode = localStorage.getItem('droneblocks_view_mode');
-  if (savedViewMode === 'drone' || savedViewMode === 'simulator' || savedViewMode === 'corridor' || savedViewMode === 'field') {
+  if (savedViewMode === 'drone' || savedViewMode === 'simulator') {
     viewMode.value = savedViewMode;
   }
 
@@ -2342,14 +2301,6 @@ onUnmounted(() => {
                 <span>🔄</span>
                 <span>{{ viewMode === 'drone' ? 'Connect to Sim' : 'Connect to DEXI' }}</span>
               </button>
-              <template v-for="env in simEnvironments" :key="env.id">
-                <template v-if="env.options && env.options.route">
-                  <button v-for="r in env.options.route" :key="env.id + r.id"
-                          @click="showEnvironment(env.id, { route: r.id }); showMenu = false" class="menu-item">
-                    <span>{{ viewMode === 'field' && simEnv === env.id && simEnvOpts.route === r.id ? '✅' : '🛬' }}</span>
-                    <span>{{ env.title }} · {{ r.title }}</span>
-                  </button>
-                </template>
                 <button v-else @click="showEnvironment(env.id); showMenu = false" class="menu-item">
                   <span>{{ viewMode === 'field' && simEnv === env.id ? '✅' : '🏷️' }}</span>
                   <span>{{ env.title }}</span>
@@ -2430,7 +2381,7 @@ onUnmounted(() => {
 
       <div v-if="viewMode !== 'drone'" class="unity-panel" :style="{ width: (100 - leftPanelWidth) + '%' }">
         <iframe
-          :src="viewMode === 'corridor' || viewMode === 'field' ? envSimUrl : unityUrl"
+          :src="simViewerUrl"
           class="unity-iframe"
           frameborder="0"
           allowfullscreen
