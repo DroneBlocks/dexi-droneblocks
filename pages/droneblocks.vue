@@ -2301,11 +2301,6 @@ onUnmounted(() => {
                 <span>🔄</span>
                 <span>{{ viewMode === 'drone' ? 'Connect to Sim' : 'Connect to DEXI' }}</span>
               </button>
-                <button v-else @click="showEnvironment(env.id); showMenu = false" class="menu-item">
-                  <span>{{ viewMode === 'field' && simEnv === env.id ? '✅' : '🏷️' }}</span>
-                  <span>{{ env.title }}</span>
-                </button>
-              </template>
             </div>
           </Transition>
         </div>
