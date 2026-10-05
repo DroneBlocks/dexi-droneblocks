@@ -689,7 +689,7 @@ export const demos: Demo[] = [
   {
     id: 'apriltag-handoff',
     name: 'Pilot Hand-off to Tag',
-    description: 'Fly to any tag by hand, give the go (channel 7 to Offboard), and the mission centers on it, holds, flies forward and lands.',
+    description: 'Fly to any tag by hand and switch to Offboard (channel 7). The mission centers on the tag, holds, flies forward and lands.',
     category: 'apriltag',
     blocklyXml: `<xml xmlns="https://developers.google.com/blockly/xml">
   <block type="apriltag_wait_for_handoff" x="50" y="50"><value name="TIMEOUT"><shadow type="math_number"><field name="NUM">120</field></shadow></value><next>
@@ -706,7 +706,7 @@ export const demos: Demo[] = [
   {
     id: 'apriltag-handoff-hop',
     name: 'Pilot Hand-off Hop',
-    description: 'Fly to a tag by hand, give the go, and the mission centers on it, hops forward to the next tag it sees, centers again, then lands.',
+    description: 'Fly to a tag by hand and switch to Offboard. The mission centers on the tag, hops forward to the next tag it sees, centers again, then lands.',
     category: 'apriltag',
     blocklyXml: `<xml xmlns="https://developers.google.com/blockly/xml">
   <block type="apriltag_wait_for_handoff" x="50" y="50"><value name="TIMEOUT"><shadow type="math_number"><field name="NUM">120</field></shadow></value><next>

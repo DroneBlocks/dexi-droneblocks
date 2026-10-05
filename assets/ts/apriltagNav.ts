@@ -1,14 +1,11 @@
 // AprilTag navigation primitives for the Blockly runner.
 //
-// PROTOTYPE. These close the vision loop in the browser over rosbridge so the
-// block vocabulary can be flown in SITL today. The production version moves
-// every loop in this file on-board (a ROS 2 node owning center / transit-until-tag /
-// land-on-tag) and the blocks keep the same names and call it through the same
-// service the other blocks use. Nothing here should ever fly a real aircraft.
+// Browser fallback used when the aircraft's tag_nav service is absent (the
+// simulator). The loops run over rosbridge and mirror the on-board node in
+// dexi_apriltag, so keep the two in step. Not for flying a real aircraft.
 //
-// Frames. The belly camera is mounted so image-up = body-forward and
-// image-right = body-right (the sim renders it that way; a real mount goes in
-// CAMERA below). Body velocity goes to the offboard manager as
+// Frames: image-up = body-forward, image-right = body-right. A different camera
+// mount goes in CAMERA below. Body velocity goes to the offboard manager as
 // set_velocity_body(vx forward, vy right, vz down).
 
 export type Direction = 'forward' | 'backward' | 'left' | 'right' | 'up' | 'down';

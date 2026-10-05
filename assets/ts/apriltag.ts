@@ -94,7 +94,7 @@ export class AprilTag {
         "colour": "#FF9800",
         "previousStatement": null,
         "nextStatement": null,
-        "tooltip": "Fly to a tag by hand, then give the go (RC switch to Offboard, or the engage button). The mission continues from here.",
+        "tooltip": "Fly to a tag by hand, then switch to Offboard on the RC. The mission continues from there.",
         "helpUrl": ""
       },
       {

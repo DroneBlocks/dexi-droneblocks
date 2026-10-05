@@ -36,10 +36,8 @@ const showKeyboardControl = ref(false);
 const showQRCode = ref(false);
 const scanPageUrl = ref('');
 
-// View mode: 'simulator' or 'drone'
-// 'simulator' = the three.js environment viewer (droneblocks-web-sim), which carries its
-// own environment picker; the GCS only embeds it.
-// 'field' = the same page showing the AVR 2026 court, 'drone' = camera feed
+// View mode: 'simulator' embeds the three.js environment viewer (droneblocks-web-sim),
+// which has its own environment picker; 'drone' shows the camera feed.
 const viewMode = ref<'simulator' | 'drone'>('simulator');
 
 // Camera overlay state
@@ -131,20 +129,15 @@ const nedEast = ref<number>(0);
 const nedDown = ref<number>(0);
 const nedHeading = ref<number>(0);
 
-// Unity simulator URL - use current hostname.
-// Append ?rosbridge=... so the Unity WebGL build connects to the right
-// rosbridge endpoint via its query-param Priority 1 path
-// (Assets/Plugins/WebGL/RosBridgeUrlHelper.jslib in the Unity project).
-// Without this, Unity falls back to constructing wss://{iframe-hostname}:9090,
-// which fails on tunneled deployments because Cloudflare doesn't proxy 9090
-// on the sim-* subdomain.
+// Simulator viewer URL, from the current hostname unless NUXT_PUBLIC_SIM_URL is set.
+// Pass the rosbridge URL explicitly so the viewer connects to the right endpoint,
+// including tunneled deployments where Cloudflare doesn't proxy 9090 on the
+// sim-* subdomain.
 const simViewerUrl = ref('');
 if (process.client) {
   const hostname = window.location.hostname;
   const port = window.location.port;
-  // The environment viewer (droneblocks-web-sim, served by the sim-env image on 1337, where
-  // the Unity player used to be). No scene in the URL: the viewer applies the environment
-  // the user last picked in its own drawer, so the GCS only embeds it.
+  // No scene in the URL: the viewer applies the environment last picked in its own drawer.
   const baseSimUrl = (useRuntimeConfig().public.simUrl || `http://${hostname}:1337`).replace(/\/$/, '');
   const rosbridgeUrl = useRuntimeConfig().public.rosbridgeUrl || `ws://${hostname}:9090`;
   simViewerUrl.value = `${baseSimUrl}/viewer-corridor.html?autoconnect=1&ws=${encodeURIComponent(rosbridgeUrl)}`;
@@ -764,7 +757,6 @@ const connectToROS = () => {
 
       // Query platform params and auto-set view mode
       loadPlatformParams(ros.value as ROSLIB.Ros).then(() => {
-        // A saved corridor view survives reconnects on a sim; anything else follows the platform
         const autoMode = isSim.value ? 'simulator' : 'drone';
         viewMode.value = autoMode;
         localStorage.setItem('droneblocks_view_mode', autoMode);
@@ -1755,7 +1747,7 @@ const runMission = async () => {
     // A failed block leaves the aircraft holding in offboard. Land it rather than
     // leave it hovering on a dead mission; the pilot can still take the mode switch.
     if (isMissionRunning.value && offboardCommandTopic.value) {
-      displayNotification('Mission failed: ' + error + ' — landing', 'error');
+      displayNotification('Mission failed, landing: ' + error, 'error');
       try {
         await executeCommandWithService('land', 0, 30);
       } catch (landError) {
@@ -2062,7 +2054,6 @@ const toggleViewMode = () => {
   viewMode.value = viewMode.value === 'drone' ? 'simulator' : 'drone';
   localStorage.setItem('droneblocks_view_mode', viewMode.value);
 };
-
 
 // Camera overlay functions
 const toggleCameraSize = () => {
