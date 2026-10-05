@@ -249,7 +249,7 @@ const blockGenerators: Record<string, BlockGenerator> = {
   // AprilTag navigation. The on-board tag navigation node exposes these through
   // the same service; the browser prototype runs them client-side.
   apriltag_wait_for_handoff: (block, indentLevel) =>
-    indent(`mission.execute_command('start_offboard_heartbeat'); mission.execute_command('stop_velocity'); mission.tag_nav('wait_for_offboard', timeout=${getInputValue(block, 'TIMEOUT', '120')})`, indentLevel),
+    indent(`mission.execute_command('start_setpoint_stream'); mission.execute_command('stop_velocity'); mission.tag_nav('wait_for_offboard', timeout=${getInputValue(block, 'TIMEOUT', '120')})`, indentLevel),
   apriltag_wait_for_tag: (block, indentLevel) =>
     indent(`mission.execute_command('wait_for_tag', ${getInputValue(block, 'TAG_ID', '0')})`, indentLevel),
   apriltag_fly_until_tag: (block, indentLevel) =>
