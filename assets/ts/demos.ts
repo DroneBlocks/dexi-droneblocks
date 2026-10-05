@@ -687,104 +687,88 @@ export const demos: Demo[] = [
 </xml>`
   },
   {
-    id: 'apriltag-led',
-    name: 'Tag Triggers LED',
-    description: 'Start monitoring AprilTags, when a tag is detected turn on rainbow LED effect.',
+    id: 'apriltag-handoff',
+    name: 'Pilot Hand-off to Tag',
+    description: 'Fly to any tag by hand and switch to Offboard (channel 7). The mission centers on the tag, holds, flies forward and lands.',
     category: 'apriltag',
     blocklyXml: `<xml xmlns="https://developers.google.com/blockly/xml">
-  <block type="apriltag_start_monitoring" x="50" y="50">
-    <next>
-      <block type="nav_wait">
-        <value name="DURATION">
-          <shadow type="math_number"><field name="NUM">5</field></shadow>
-        </value>
-        <next>
-          <block type="controls_if">
-            <value name="IF0">
-              <block type="logic_compare">
-                <field name="OP">GTE</field>
-                <value name="A">
-                  <block type="apriltag_get_last_id"></block>
-                </value>
-                <value name="B">
-                  <block type="math_number">
-                    <field name="NUM">0</field>
-                  </block>
-                </value>
-              </block>
-            </value>
-            <statement name="DO0">
-              <block type="led_effect">
-                <field name="EFFECT">rainbow</field>
-              </block>
-            </statement>
-            <next>
-              <block type="apriltag_stop_monitoring"></block>
-            </next>
-          </block>
-        </next>
-      </block>
-    </next>
-  </block>
+  <block type="apriltag_wait_for_handoff" x="50" y="50"><value name="TIMEOUT"><shadow type="math_number"><field name="NUM">120</field></shadow></value><next>
+    <block type="apriltag_center_on_tag"><value name="TAG_ID"><shadow type="math_number"><field name="NUM">-1</field></shadow></value><next>
+      <block type="nav_wait"><value name="DURATION"><shadow type="math_number"><field name="NUM">5</field></shadow></value><next>
+        <block type="nav_fly_forward"><value name="DISTANCE"><shadow type="math_number"><field name="NUM">1</field></shadow></value><field name="UNIT">m</field><next>
+          <block type="nav_land"></block>
+        </next></block>
+      </next></block>
+    </next></block>
+  </next></block>
+</xml>`
+  },
+  {
+    id: 'apriltag-handoff-hop',
+    name: 'Pilot Hand-off Hop',
+    description: 'Fly to a tag by hand and switch to Offboard. The mission centers on the tag, hops forward to the next tag it sees, centers again, then lands.',
+    category: 'apriltag',
+    blocklyXml: `<xml xmlns="https://developers.google.com/blockly/xml">
+  <block type="apriltag_wait_for_handoff" x="50" y="50"><value name="TIMEOUT"><shadow type="math_number"><field name="NUM">120</field></shadow></value><next>
+    <block type="apriltag_center_on_tag"><value name="TAG_ID"><shadow type="math_number"><field name="NUM">-1</field></shadow></value><next>
+      <block type="nav_wait"><value name="DURATION"><shadow type="math_number"><field name="NUM">3</field></shadow></value><next>
+        <block type="apriltag_fly_until_tag"><field name="DIRECTION">forward</field><value name="SPEED"><shadow type="math_number"><field name="NUM">0.4</field></shadow></value><value name="TAG_ID"><shadow type="math_number"><field name="NUM">-1</field></shadow></value><next>
+          <block type="apriltag_center_on_tag"><value name="TAG_ID"><shadow type="math_number"><field name="NUM">-1</field></shadow></value><next>
+            <block type="nav_wait"><value name="DURATION"><shadow type="math_number"><field name="NUM">3</field></shadow></value><next>
+              <block type="nav_land"></block>
+            </next></block>
+          </next></block>
+        </next></block>
+      </next></block>
+    </next></block>
+  </next></block>
+</xml>`
+  },
+  {
+    id: 'apriltag-corridor',
+    name: 'AprilTag Corridor',
+    description: 'Take off over tag 0, then hop tag to tag down a corridor and land on the last one. Runs in the corridor sim.',
+    category: 'apriltag',
+    blocklyXml: `<xml xmlns="https://developers.google.com/blockly/xml">
+  <variables><variable id="corridor_i">i</variable></variables>
+  <block type="nav_arm" x="50" y="50"><next>
+    <block type="nav_switch_offboard_mode"><next>
+      <block type="nav_takeoff"><value name="ALTITUDE"><shadow type="math_number"><field name="NUM">1.5</field></shadow></value><next>
+        <block type="apriltag_wait_for_tag"><value name="TAG_ID"><shadow type="math_number"><field name="NUM">0</field></shadow></value><next>
+          <block type="apriltag_center_on_tag"><value name="TAG_ID"><shadow type="math_number"><field name="NUM">0</field></shadow></value><next>
+            <block type="controls_for"><field name="VAR" id="corridor_i">i</field><value name="FROM"><shadow type="math_number"><field name="NUM">1</field></shadow></value><value name="TO"><shadow type="math_number"><field name="NUM">6</field></shadow></value><value name="BY"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
+              <statement name="DO">
+                <block type="apriltag_fly_until_tag"><field name="DIRECTION">forward</field><value name="SPEED"><shadow type="math_number"><field name="NUM">0.5</field></shadow></value><value name="TAG_ID"><block type="variables_get"><field name="VAR" id="corridor_i">i</field></block></value><next>
+                  <block type="apriltag_center_on_tag"><value name="TAG_ID"><block type="variables_get"><field name="VAR" id="corridor_i">i</field></block></value></block>
+                </next></block>
+              </statement>
+              <next><block type="apriltag_land_on_tag"><value name="TAG_ID"><shadow type="math_number"><field name="NUM">6</field></shadow></value></block></next>
+            </block>
+          </next></block>
+        </next></block>
+      </next></block>
+    </next></block>
+  </next></block>
 </xml>`
   },
   {
     id: 'apriltag-land',
     name: 'Tag 1 Triggers Land',
-    description: 'While flying, if AprilTag ID 1 is detected, land the drone.',
+    description: 'Take off, hover, and land if AprilTag 1 is in view.',
     category: 'apriltag',
     blocklyXml: `<xml xmlns="https://developers.google.com/blockly/xml">
-  <block type="nav_arm" x="50" y="50">
-    <next>
-      <block type="nav_switch_offboard_mode">
-        <next>
-          <block type="nav_takeoff">
-            <value name="ALTITUDE">
-              <shadow type="math_number"><field name="NUM">2</field></shadow>
-            </value>
-            <next>
-              <block type="apriltag_start_monitoring">
-                <next>
-                  <block type="nav_wait">
-                    <value name="DURATION">
-                      <shadow type="math_number"><field name="NUM">5</field></shadow>
-                    </value>
-                    <next>
-                      <block type="controls_if">
-                        <value name="IF0">
-                          <block type="logic_compare">
-                            <field name="OP">EQ</field>
-                            <value name="A">
-                              <block type="apriltag_get_last_id"></block>
-                            </value>
-                            <value name="B">
-                              <block type="math_number">
-                                <field name="NUM">1</field>
-                              </block>
-                            </value>
-                          </block>
-                        </value>
-                        <statement name="DO0">
-                          <block type="nav_land">
-                            <next>
-                              <block type="nav_disarm"></block>
-                            </next>
-                          </block>
-                        </statement>
-                        <next>
-                          <block type="apriltag_stop_monitoring"></block>
-                        </next>
-                      </block>
-                    </next>
-                  </block>
-                </next>
-              </block>
-            </next>
+  <block type="nav_arm" x="50" y="50"><next>
+    <block type="nav_switch_offboard_mode"><next>
+      <block type="nav_takeoff"><value name="ALTITUDE"><shadow type="math_number"><field name="NUM">2</field></shadow></value><next>
+        <block type="nav_wait"><value name="DURATION"><shadow type="math_number"><field name="NUM">5</field></shadow></value><next>
+          <block type="controls_if">
+            <value name="IF0"><block type="apriltag_tag_visible"><value name="TAG_ID"><shadow type="math_number"><field name="NUM">1</field></shadow></value></block></value>
+            <statement name="DO0"><block type="nav_land"></block></statement>
           </block>
-        </next>
-      </block>
-    </next>
-  </block>
+        </next></block>
+      </next></block>
+    </next></block>
+  </next></block>
 </xml>`
   }
 ];

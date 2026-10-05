@@ -246,6 +246,18 @@ const blockGenerators: Record<string, BlockGenerator> = {
   // AprilTag blocks
   apriltag_start_monitoring: (block, indentLevel) => indent(`# Start monitoring AprilTags (handled by ROS2 node)`, indentLevel),
   apriltag_stop_monitoring: (block, indentLevel) => indent(`# Stop monitoring AprilTags (handled by ROS2 node)`, indentLevel),
+  // AprilTag navigation. The on-board tag navigation node exposes these through
+  // the same service; the browser prototype runs them client-side.
+  apriltag_wait_for_handoff: (block, indentLevel) =>
+    indent(`mission.execute_command('start_setpoint_stream'); mission.execute_command('stop_velocity'); mission.tag_nav('wait_for_offboard', timeout=${getInputValue(block, 'TIMEOUT', '120')})`, indentLevel),
+  apriltag_wait_for_tag: (block, indentLevel) =>
+    indent(`mission.execute_command('wait_for_tag', ${getInputValue(block, 'TAG_ID', '0')})`, indentLevel),
+  apriltag_fly_until_tag: (block, indentLevel) =>
+    indent(`mission.fly_velocity('${block.getFieldValue('DIRECTION')}', ${getInputValue(block, 'SPEED', '0.5')}, until_tag=${getInputValue(block, 'TAG_ID', '1')})`, indentLevel),
+  apriltag_center_on_tag: (block, indentLevel) =>
+    indent(`mission.execute_command('center_on_tag', ${getInputValue(block, 'TAG_ID', '0')})`, indentLevel),
+  apriltag_land_on_tag: (block, indentLevel) =>
+    indent(`mission.execute_command('land_on_tag', ${getInputValue(block, 'TAG_ID', '0')})`, indentLevel),
   apriltag_get_last_id: () => `last_detected_tag_id`,
   apriltag_get_tag_count: () => `detected_tag_count`,
 

@@ -117,7 +117,14 @@ let consumerCount = 0
 function getMavlinkBaseUrl(): { ws: string; http: string } {
   if (typeof window === 'undefined') return { ws: '', http: '' }
   const params = new URLSearchParams(window.location.search)
-  const host = params.get('mavlinkHost') || window.location.hostname
+  // Read mavlink2rest from the rosbridge host when NUXT_PUBLIC_ROSBRIDGE_URL is
+  // set, so a GCS served from another machine shows the aircraft's telemetry.
+  let rosbridgeHost = ''
+  try {
+    const configured = useRuntimeConfig().public.rosbridgeUrl
+    if (configured) rosbridgeHost = new URL(configured).hostname
+  } catch { /* no override or not a URL */ }
+  const host = params.get('mavlinkHost') || rosbridgeHost || window.location.hostname
   const isSecure = window.location.protocol === 'https:'
   const wsProtocol = isSecure ? 'wss:' : 'ws:'
   const httpProtocol = isSecure ? 'https:' : 'http:'

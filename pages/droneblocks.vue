@@ -4,6 +4,7 @@ import * as Blockly from 'blockly/core';
 import { Navigation } from '~/assets/ts/navigation';
 import { LED } from '~/assets/ts/led';
 import { AprilTag } from '~/assets/ts/apriltag';
+import * as tagNav from '~/assets/ts/apriltagNav';
 import { javascriptGenerator } from 'blockly/javascript';
 import ROSLIB from 'roslib';
 import { useROS } from '~/composables/useROS';
@@ -35,7 +36,8 @@ const showKeyboardControl = ref(false);
 const showQRCode = ref(false);
 const scanPageUrl = ref('');
 
-// View mode: 'simulator' or 'drone'
+// View mode: 'simulator' embeds the three.js environment viewer (droneblocks-web-sim),
+// which has its own environment picker; 'drone' shows the camera feed.
 const viewMode = ref<'simulator' | 'drone'>('simulator');
 
 // Camera overlay state
@@ -81,6 +83,10 @@ const ros = ref<ROSLIB.Ros | null>(null);
 const connected = ref(false);
 const offboardCommandTopic = ref<ROSLIB.Topic | null>(null);
 const blocklyCommandService = ref<ROSLIB.Service | null>(null);
+// On-board AprilTag navigation (dexi_apriltag tag_nav). Same request shape as the
+// manager's service; when the aircraft runs it, the tag blocks go there and the
+// browser loop in apriltagNav.ts is only the simulator fallback.
+const tagNavService = ref<ROSLIB.Service | null>(null);
 const ledEffectService = ref<ROSLIB.Service | null>(null);
 const ledRingColorService = ref<ROSLIB.Service | null>(null);
 const ledPixelColorService = ref<ROSLIB.Service | null>(null);
@@ -91,6 +97,9 @@ const notificationMessage = ref('');
 const notificationType = ref<'success' | 'error'>('success');
 const apriltagSubscription = ref<ROSLIB.Topic | null>(null);
 const lastDetectedTagId = ref<number>(-1);
+// Latest full detection frame + camera intrinsics, consumed by the AprilTag navigation blocks
+const tagDetections = { ms: 0, list: [] as tagNav.TagDetection[] };
+const cameraIntrinsics = ref<tagNav.CameraIntrinsics | null>(null);
 const detectedTagCount = ref<number>(0);
 const currentAprilTagId = ref<number>(-1);
 let apriltagTimeoutId: NodeJS.Timeout | null = null;
@@ -120,20 +129,18 @@ const nedEast = ref<number>(0);
 const nedDown = ref<number>(0);
 const nedHeading = ref<number>(0);
 
-// Unity simulator URL - use current hostname.
-// Append ?rosbridge=... so the Unity WebGL build connects to the right
-// rosbridge endpoint via its query-param Priority 1 path
-// (Assets/Plugins/WebGL/RosBridgeUrlHelper.jslib in the Unity project).
-// Without this, Unity falls back to constructing wss://{iframe-hostname}:9090,
-// which fails on tunneled deployments because Cloudflare doesn't proxy 9090
-// on the sim-* subdomain.
-const unityUrl = ref('');
+// Simulator viewer URL, from the current hostname unless NUXT_PUBLIC_SIM_URL is set.
+// Pass the rosbridge URL explicitly so the viewer connects to the right endpoint,
+// including tunneled deployments where Cloudflare doesn't proxy 9090 on the
+// sim-* subdomain.
+const simViewerUrl = ref('');
 if (process.client) {
   const hostname = window.location.hostname;
   const port = window.location.port;
-  const baseSimUrl = useRuntimeConfig().public.simUrl || `http://${hostname}:1337`;
+  // No scene in the URL: the viewer applies the environment last picked in its own drawer.
+  const baseSimUrl = (useRuntimeConfig().public.simUrl || `http://${hostname}:1337`).replace(/\/$/, '');
   const rosbridgeUrl = useRuntimeConfig().public.rosbridgeUrl || `ws://${hostname}:9090`;
-  unityUrl.value = `${baseSimUrl}?rosbridge=${encodeURIComponent(rosbridgeUrl)}`;
+  simViewerUrl.value = `${baseSimUrl}/viewer-corridor.html?autoconnect=1&ws=${encodeURIComponent(rosbridgeUrl)}`;
   scanPageUrl.value = `${window.location.protocol}//${hostname}${port ? ':' + port : ''}/scan`;
 }
 
@@ -346,10 +353,25 @@ const options = {
       </block>
     </category>
     <category name="April Tags" colour="#FF9800">
-      <block type="apriltag_start_monitoring"></block>
-      <block type="apriltag_stop_monitoring"></block>
-      <block type="apriltag_get_last_id"></block>
-      <block type="apriltag_get_tag_count"></block>
+      <block type="apriltag_wait_for_handoff">
+        <value name="TIMEOUT"><shadow type="math_number"><field name="NUM">120</field></shadow></value>
+      </block>
+      <block type="apriltag_wait_for_tag">
+        <value name="TAG_ID"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      </block>
+      <block type="apriltag_center_on_tag">
+        <value name="TAG_ID"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      </block>
+      <block type="apriltag_fly_until_tag">
+        <value name="SPEED"><shadow type="math_number"><field name="NUM">0.5</field></shadow></value>
+        <value name="TAG_ID"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
+      </block>
+      <block type="apriltag_land_on_tag">
+        <value name="TAG_ID"><shadow type="math_number"><field name="NUM">6</field></shadow></value>
+      </block>
+      <block type="apriltag_tag_visible">
+        <value name="TAG_ID"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+      </block>
     </category>
     <category name="Logic" colour="%{BKY_LOGIC_HUE}">
       <block type="controls_if"></block>
@@ -650,6 +672,12 @@ const connectToROS = () => {
         serviceType: 'dexi_interfaces/srv/ExecuteBlocklyCommand'
       });
 
+      tagNavService.value = new ROSLIB.Service({
+        ros: ros.value as ROSLIB.Ros,
+        name: '/dexi/tag_nav/execute',
+        serviceType: 'dexi_interfaces/srv/ExecuteBlocklyCommand'
+      });
+
       // Create LED service clients
       ledEffectService.value = new ROSLIB.Service({
         ros: ros.value as ROSLIB.Ros,
@@ -677,6 +705,8 @@ const connectToROS = () => {
       });
 
       apriltagDebugTopic.subscribe((message: any) => {
+        tagDetections.ms = Date.now();
+        tagDetections.list = message.detections || [];
         if (message.detections && message.detections.length > 0) {
           currentAprilTagId.value = message.detections[0].id;
 
@@ -701,6 +731,20 @@ const connectToROS = () => {
         messageType: 'px4_msgs/msg/VehicleLocalPosition',
         throttle_rate: 200,
         queue_length: 1,
+      });
+
+      // Camera intrinsics, so tag pixel offsets can be turned into meters
+      const cameraInfoTopic = new ROSLIB.Topic({
+        ros: ros.value as ROSLIB.Ros,
+        name: '/cam0/camera_info',
+        messageType: 'sensor_msgs/msg/CameraInfo',
+        throttle_rate: 1000,
+        queue_length: 1,
+      });
+      cameraInfoTopic.subscribe((m: any) => {
+        if (m.k && m.k[0] > 0) {
+          cameraIntrinsics.value = { width: m.width, height: m.height, fx: m.k[0], fy: m.k[4], cx: m.k[2], cy: m.k[5] };
+        }
       });
 
       localPositionTopic.subscribe((message: any) => {
@@ -870,6 +914,99 @@ const getMeters = (block: any, inputName: string, defaultValue: number): number 
   return block.getFieldValue('UNIT') === 'ft' ? value * 0.3048 : value;
 };
 
+// AprilTag navigation blocks. One handler shared by the top level and every loop body.
+const navCtx: tagNav.NavContext = {
+  publish: (cmd) => {
+    offboardCommandTopic.value?.publish({ distance_or_degrees: 0, north: 0, east: 0, down: 0, yaw: 0, ...cmd });
+  },
+  callService: (command, parameter, timeout) => executeCommandWithService(command, parameter, timeout),
+  detections: () => tagDetections,
+  camera: () => cameraIntrinsics.value,
+  altitude: () => -nedDown.value,
+  running: () => isMissionRunning.value,
+  log: (msg) => console.log(`🏷️ ${msg}`),
+};
+
+// Ask the aircraft's tag_nav node first. Resolves onboard=false when the service
+// is not there (simulator, or a drone without the node), so the caller can fall
+// back to the browser prototype. Any other failure is a real one.
+const callTagNav = (command: string, parameter: number, timeout: number, extra: Record<string, number> = {}) =>
+  new Promise<{ onboard: boolean; ok: boolean; message: string }>((resolve) => {
+    if (!tagNavService.value) return resolve({ onboard: false, ok: false, message: 'not connected' });
+    const request = new ROSLIB.ServiceRequest({ command, parameter, timeout, ...extra });
+    tagNavService.value.callService(request,
+      (r: any) => resolve({ onboard: true, ok: !!r.success, message: r.message || '' }),
+      (err: any) => {
+        const text = String(err);
+        if (/does not exist|not available|unavailable/i.test(text)) {
+          resolve({ onboard: false, ok: false, message: text });
+        } else {
+          resolve({ onboard: true, ok: false, message: text });
+        }
+      });
+  });
+
+const runAprilTagNavBlock = async (block: any): Promise<boolean> => {
+  switch (block.type) {
+    case 'apriltag_wait_for_handoff': {
+      // The pilot flies to a tag by hand. Stream a zero-velocity hold so PX4 will
+      // accept the switch to Offboard, then wait for the aircraft's tag_nav to see
+      // armed + airborne + Offboard + engage. Only meaningful with the on-board node.
+      const timeout = getInputValue(block, 'TIMEOUT', 120);
+      navCtx.publish({ command: 'start_setpoint_stream' });   // stream only; the pilot's switch selects Offboard
+      await new Promise(r => setTimeout(r, 300));
+      navCtx.publish({ command: 'stop_velocity' });
+      console.log(`🏷️ waiting for pilot hand-off (up to ${timeout} s)`);
+      const r = await callTagNav('wait_for_offboard', 0, timeout);
+      if (!r.onboard) throw new Error('pilot hand-off needs the aircraft\'s tag_nav node');
+      console.log(`🏷️ hand-off: ${r.ok ? 'accepted' : 'FAILED'} ${r.message}`);
+      if (!r.ok) throw new Error(r.message);
+      return true;
+    }
+    case 'apriltag_wait_for_tag': {
+      const id = getInputValue(block, 'TAG_ID', 0);
+      const r = await callTagNav('wait_for_tag', id, tagNav.NAV.waitTimeoutS);
+      if (r.onboard) {
+        console.log(`🏷️ on-board wait_for_tag ${id}: ${r.ok ? 'ok' : 'FAILED'} ${r.message}`);
+        if (!r.ok) throw new Error(r.message);
+        return true;
+      }
+      await tagNav.waitForTag(navCtx, id);
+      return true;
+    }
+    case 'apriltag_fly_until_tag': {
+      const dir = block.getFieldValue('DIRECTION') as tagNav.Direction;
+      const speed = getInputValue(block, 'SPEED', 0.5);
+      const id = getInputValue(block, 'TAG_ID', 1);
+      const v = tagNav.bodyVelocity(dir, speed);
+      const r = await callTagNav('fly_until_tag', id, tagNav.NAV.transitTimeoutS, { north: v.vx, east: v.vy, down: v.vz });
+      if (r.onboard) {
+        console.log(`🏷️ on-board fly_until_tag ${id}: ${r.ok ? 'ok' : 'FAILED'} ${r.message}`);
+        if (!r.ok) throw new Error(r.message);
+        return true;
+      }
+      await tagNav.flyUntilTag(navCtx, dir, speed, id);
+      return true;
+    }
+    case 'apriltag_center_on_tag': {
+      const id = getInputValue(block, 'TAG_ID', 0);
+      const r = await callTagNav('center_on_tag', id, tagNav.NAV.center.timeoutS);
+      if (r.onboard) {
+        console.log(`🏷️ on-board center_on_tag ${id}: ${r.ok ? 'ok' : 'FAILED'} ${r.message}`);
+        if (!r.ok) throw new Error(r.message);
+        return true;
+      }
+      await tagNav.centerOnTag(navCtx, id);
+      return true;
+    }
+    case 'apriltag_land_on_tag':
+      await tagNav.landOnTag(navCtx, getInputValue(block, 'TAG_ID', 0));
+      return true;
+    default:
+      return false;
+  }
+};
+
 const runMission = async () => {
   if (!connected.value || !blocklyCommandService.value) {
     displayNotification('Please connect to ROS first!', 'error');
@@ -886,6 +1023,7 @@ const runMission = async () => {
 
   try {
     isMissionRunning.value = true;
+    tagNav.resetHoldAltitude();
 
     // Get all blocks in execution order
     const mainBlock = topBlocks[0];
@@ -908,7 +1046,9 @@ const runMission = async () => {
 
       try {
         // Parse block and execute command
-        if (blockType === 'nav_arm') {
+        if (await runAprilTagNavBlock(block)) {
+          // AprilTag navigation block, handled above
+        } else if (blockType === 'nav_arm') {
           await executeCommandWithService('arm', 0, 10);
         } else if (blockType === 'nav_disarm') {
           await executeCommandWithService('disarm', 0, 10);
@@ -1127,7 +1267,9 @@ const runMission = async () => {
                 const innerBlockType = currentBlock.type;
 
                 // Execute blocks inside the loop (similar to if statement handling)
-                if (innerBlockType === 'text_print') {
+                if (await runAprilTagNavBlock(currentBlock)) {
+                  // AprilTag navigation block, handled above
+                } else if (innerBlockType === 'text_print') {
                   const textBlock = currentBlock.getInputTargetBlock('TEXT');
                   let message = '';
                   if (textBlock && textBlock.type === 'text') {
@@ -1377,7 +1519,9 @@ const runMission = async () => {
                 const innerBlockType = currentBlock.type;
 
                 // Execute blocks inside the for loop
-                if (innerBlockType === 'led_pixel') {
+                if (await runAprilTagNavBlock(currentBlock)) {
+                  // AprilTag navigation block, handled above
+                } else if (innerBlockType === 'led_pixel') {
                   const pixelIndex = getInputValue(currentBlock, 'index', 0);
                   const pixelRed = getInputValue(currentBlock, 'red', 255);
                   const pixelGreen = getInputValue(currentBlock, 'green', 255);
@@ -1454,7 +1598,9 @@ const runMission = async () => {
           if (conditionValue) {
             const conditionType = conditionValue.type;
 
-            if (conditionType === 'logic_compare') {
+            if (conditionType === 'apriltag_tag_visible') {
+              shouldExecute = !!tagNav.visibleTag(navCtx, getInputValue(conditionValue, 'TAG_ID', 0));
+            } else if (conditionType === 'logic_compare') {
               const operator = conditionValue.getFieldValue('OP');
               const leftBlock = conditionValue.getInputTargetBlock('A');
               const rightBlock = conditionValue.getInputTargetBlock('B');
@@ -1597,19 +1743,37 @@ const runMission = async () => {
 
   } catch (error) {
     console.error('❌ Mission failed:', error);
-    displayNotification('Mission failed: ' + error, 'error');
     foo.value.workspace.highlightBlock(null);
+    // A failed block leaves the aircraft holding in offboard. Land it rather than
+    // leave it hovering on a dead mission; the pilot can still take the mode switch.
+    if (isMissionRunning.value && offboardCommandTopic.value) {
+      displayNotification('Mission failed, landing: ' + error, 'error');
+      try {
+        await executeCommandWithService('land', 0, 30);
+      } catch (landError) {
+        console.error('❌ Land after failure also failed:', landError);
+      }
+    } else {
+      displayNotification('Mission failed: ' + error, 'error');
+    }
   } finally {
     isMissionRunning.value = false;
   }
 };
 
+const engageTopic = ref<ROSLIB.Topic | null>(null);
 const stopMission = () => {
   if (!connected.value || !offboardCommandTopic.value) {
     return;
   }
 
   isMissionRunning.value = false;
+
+  // Cancel a pending hand-off wait and stand down any running tag primitive
+  if (!engageTopic.value && ros.value) {
+    engageTopic.value = new ROSLIB.Topic({ ros: ros.value as ROSLIB.Ros, name: '/dexi/tag_nav/engage', messageType: 'std_msgs/Bool' });
+  }
+  engageTopic.value?.publish({ data: false });
 
   // Send disarm command
   offboardCommandTopic.value.publish({
@@ -1887,7 +2051,7 @@ const openKeyboardControl = () => {
 
 // Toggle view mode
 const toggleViewMode = () => {
-  viewMode.value = viewMode.value === 'simulator' ? 'drone' : 'simulator';
+  viewMode.value = viewMode.value === 'drone' ? 'simulator' : 'drone';
   localStorage.setItem('droneblocks_view_mode', viewMode.value);
 };
 
@@ -2126,7 +2290,7 @@ onUnmounted(() => {
               </button>
               <button @click="toggleViewMode" class="menu-item">
                 <span>🔄</span>
-                <span>{{ viewMode === 'simulator' ? 'Connect to DEXI' : 'Connect to Sim' }}</span>
+                <span>{{ viewMode === 'drone' ? 'Connect to Sim' : 'Connect to DEXI' }}</span>
               </button>
             </div>
           </Transition>
@@ -2168,7 +2332,7 @@ onUnmounted(() => {
     </div>
 
     <div class="split-container">
-      <div class="blockly-panel" :style="{ width: viewMode === 'simulator' ? leftPanelWidth + '%' : '100%' }">
+      <div class="blockly-panel" :style="{ width: viewMode !== 'drone' ? leftPanelWidth + '%' : '100%' }">
         <!-- Blockly Workspace Container -->
         <div class="blockly-workspace-container">
           <blockly-component
@@ -2197,13 +2361,13 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div v-if="viewMode === 'simulator'" class="divider" @mousedown="startDragging" :class="{ dragging: isDragging }">
+      <div v-if="viewMode !== 'drone'" class="divider" @mousedown="startDragging" :class="{ dragging: isDragging }">
         <div class="divider-handle"></div>
       </div>
 
-      <div v-if="viewMode === 'simulator'" class="unity-panel" :style="{ width: (100 - leftPanelWidth) + '%' }">
+      <div v-if="viewMode !== 'drone'" class="unity-panel" :style="{ width: (100 - leftPanelWidth) + '%' }">
         <iframe
-          :src="unityUrl"
+          :src="simViewerUrl"
           class="unity-iframe"
           frameborder="0"
           allowfullscreen
