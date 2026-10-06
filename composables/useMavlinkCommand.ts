@@ -4,6 +4,8 @@
 // mavlink2rest accepts a POST to /mavlink with the same envelope it streams
 // back, and forwards it into the mavlink-router fabric.
 
+import { mavlinkUrlOverride } from './useTelemetry'
+
 const SYSTEM_ID_GCS = 255
 const COMPONENT_ID_GCS = 190
 const TARGET_SYSTEM = 1
@@ -12,6 +14,8 @@ const TARGET_COMPONENT = 1
 function getHttpBase(): string {
   if (typeof window === 'undefined') return ''
   const params = new URLSearchParams(window.location.search)
+  const base = mavlinkUrlOverride(params)
+  if (base) return base
   const host = params.get('mavlinkHost') || window.location.hostname
   const proto = window.location.protocol === 'https:' ? 'https:' : 'http:'
   return `${proto}//${host}:8088`

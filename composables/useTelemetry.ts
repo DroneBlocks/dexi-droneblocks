@@ -114,9 +114,21 @@ let nowTicker: number | null = null
 let slowPollTimer: number | null = null
 let consumerCount = 0
 
+export function mavlinkUrlOverride(params: URLSearchParams): string {
+  if (params.get('mavlinkHost')) return ''
+  try {
+    const configured = useRuntimeConfig().public.mavlinkUrl as string
+    return configured ? configured.replace(/\/+$/, '') : ''
+  } catch { return '' }
+}
+
 function getMavlinkBaseUrl(): { ws: string; http: string } {
   if (typeof window === 'undefined') return { ws: '', http: '' }
   const params = new URLSearchParams(window.location.search)
+  // A deployment that publishes mavlink2rest at its own URL (the cloud sim's tunnel)
+  // sets NUXT_PUBLIC_MAVLINK_URL; otherwise it is port 8088 on the aircraft or sim host.
+  const base = mavlinkUrlOverride(params)
+  if (base) return { ws: base.replace(/^http/, 'ws') + '/ws/mavlink', http: base }
   // Read mavlink2rest from the rosbridge host when NUXT_PUBLIC_ROSBRIDGE_URL is
   // set, so a GCS served from another machine shows the aircraft's telemetry.
   let rosbridgeHost = ''

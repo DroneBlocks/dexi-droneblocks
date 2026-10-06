@@ -10,7 +10,8 @@ export default defineNuxtConfig({
       simUrl: process.env.NUXT_PUBLIC_SIM_URL || '',
       rosbridgeUrl: process.env.NUXT_PUBLIC_ROSBRIDGE_URL || '',
       nodeRedUrl: process.env.NUXT_PUBLIC_NODE_RED_URL || '',
-      vscodeUrl: process.env.NUXT_PUBLIC_VSCODE_URL || ''
+      vscodeUrl: process.env.NUXT_PUBLIC_VSCODE_URL || '',
+      mavlinkUrl: process.env.NUXT_PUBLIC_MAVLINK_URL || ''
     }
   },
   postcss: {
