@@ -123,7 +123,7 @@
             <span class="text-3xl">🐍</span>
             <div class="text-left">
               <h2 class="text-2xl font-bold text-slate-900">Python Missions</h2>
-              <p class="text-slate-600 text-sm">Python code examples - click to open in VS Code Server</p>
+              <p class="text-slate-600 text-sm">Open a script in VS Code with the sim or the drone camera beside it</p>
             </div>
           </div>
           <span class="text-2xl text-slate-400 transition-transform" :class="{ 'rotate-180': pythonExpanded }">
@@ -133,22 +133,23 @@
       </div>
 
       <div v-show="pythonExpanded" class="section-content">
-        <!-- Python Missions -->
-        <div class="mb-12">
+        <div v-for="group in pythonExampleGroups" :key="group.id" class="mb-10">
+          <h3 class="text-lg font-semibold text-slate-900">{{ group.name }}</h3>
+          <p class="text-slate-600 text-sm mb-4">{{ group.description }}</p>
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             <div
-              v-for="mission in pythonMissions"
-              :key="mission.id"
+              v-for="example in group.examples"
+              :key="example.id"
               class="group card cursor-pointer"
-              @click="launchPythonMission(mission)"
+              @click="launchPythonExample(example)"
             >
               <div class="card-content">
                 <div class="icon-wrapper bg-purple-50">
                   <span class="text-3xl">🐍</span>
                 </div>
-                <h3 class="card-title">{{ mission.name }}</h3>
-                <p class="card-description">{{ mission.description }}</p>
-                <div class="card-arrow">↗</div>
+                <h3 class="card-title">{{ example.name }}</h3>
+                <p class="card-description">{{ example.description }}</p>
+                <div class="card-arrow">→</div>
               </div>
             </div>
           </div>
@@ -161,8 +162,8 @@
 
 <script setup lang="ts">
 import { demos, getDemosByCategory, type Demo } from '~/assets/ts/demos';
+import { pythonExampleGroups, type PythonExample } from '~/assets/ts/pythonExamples';
 
-const hostname = process.client ? window.location.hostname : 'localhost';
 
 // Expand/collapse state
 const droneBlocksExpanded = ref(false);
@@ -171,24 +172,6 @@ const pythonExpanded = ref(false);
 const basicDemos = computed(() => getDemosByCategory('basic'));
 const navigationDemos = computed(() => getDemosByCategory('navigation'));
 const apriltagDemos = computed(() => getDemosByCategory('apriltag'));
-
-interface PythonMission {
-  id: string;
-  name: string;
-  description: string;
-  folder: string;
-  file: string;
-}
-
-const pythonMissions: PythonMission[] = [
-  {
-    id: 'box-mission',
-    name: 'Box Mission',
-    description: 'Fly in a box pattern using MAVSDK Python. Great starting point for custom missions.',
-    folder: '/home/coder',
-    file: '/home/coder/dexi-mavsdk/missions/box_mission.py'
-  }
-];
 
 function getCategoryIcon(category: Demo['category']): string {
   switch (category) {
@@ -212,13 +195,8 @@ function launchDemo(demo: Demo) {
   window.open(`/droneblocks?demo=${demo.id}`, '_blank');
 }
 
-function launchPythonMission(mission: PythonMission) {
-  // Open code-server in a new tab with the folder and file. Branded
-  // tunnel deployments inject NUXT_PUBLIC_VSCODE_URL; hardware/local dev
-  // fall back to http://hostname:9999.
-  const baseUrl = useRuntimeConfig().public.vscodeUrl || `http://${hostname}:9999`;
-  const url = `${baseUrl}/?folder=${encodeURIComponent(mission.folder)}&file=${encodeURIComponent(mission.file)}`;
-  window.open(url, '_blank');
+function launchPythonExample(example: PythonExample) {
+  window.open(`/python?file=${encodeURIComponent(example.path)}`, '_blank');
 }
 </script>
 
