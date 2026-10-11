@@ -361,6 +361,7 @@ const options = {
       </block>
       <block type="apriltag_center_on_tag">
         <value name="TAG_ID"><shadow type="math_number"><field name="NUM">0</field></shadow></value>
+        <value name="HOLD"><shadow type="math_number"><field name="NUM">1</field></shadow></value>
       </block>
       <block type="apriltag_fly_until_tag">
         <value name="SPEED"><shadow type="math_number"><field name="NUM">0.5</field></shadow></value>
@@ -665,17 +666,17 @@ const connectToROS = () => {
         messageType: 'dexi_interfaces/msg/OffboardNavCommand'
       });
 
-      // Create service client for blockly commands (with feedback)
+      // Flight steps: each call returns when the step is done (or failed)
       blocklyCommandService.value = new ROSLIB.Service({
         ros: ros.value as ROSLIB.Ros,
-        name: '/dexi/execute_blockly_command',
-        serviceType: 'dexi_interfaces/srv/ExecuteBlocklyCommand'
+        name: '/dexi/flight/command',
+        serviceType: 'dexi_interfaces/srv/FlightCommand'
       });
 
       tagNavService.value = new ROSLIB.Service({
         ros: ros.value as ROSLIB.Ros,
-        name: '/dexi/tag_nav/execute',
-        serviceType: 'dexi_interfaces/srv/ExecuteBlocklyCommand'
+        name: '/dexi/tag_nav/command',
+        serviceType: 'dexi_interfaces/srv/TagNavCommand'
       });
 
       // Create LED service clients
@@ -814,7 +815,7 @@ const executeCommandWithService = (command: string, parameter: number = 0.0, tim
 
     const request = new ROSLIB.ServiceRequest({
       command: command,
-      parameter: parameter,
+      value: parameter,
       timeout: timeout
     });
 
@@ -840,49 +841,38 @@ const executeCommandWithService = (command: string, parameter: number = 0.0, tim
 // Execute goto NED command - uses service with proper target detection
 const executeGotoNEDWithService = (north: number, east: number, down: number, yaw: number, timeout: number = 30.0): Promise<any> => {
   return new Promise((resolve, reject) => {
-    if (!offboardCommandTopic.value || !blocklyCommandService.value) {
+    if (!blocklyCommandService.value) {
       reject('Service not available');
       return;
     }
 
     console.log(`🎯 Going to NED position: N=${north}, E=${east}, D=${down}, Yaw=${yaw}°`);
 
-    // First, publish the NED parameters to the topic so the backend can store them
-    offboardCommandTopic.value.publish({
-      command: 'set_goto_ned_params',
-      distance_or_degrees: 0.0,
+    const request = new ROSLIB.ServiceRequest({
+      command: 'goto_ned',
       north: north,
       east: east,
       down: down,
-      yaw: yaw
+      yaw: yaw,
+      timeout: timeout
     });
 
-    // Small delay to ensure the params are set before calling the service
-    setTimeout(() => {
-      // Now call the service with goto_ned command
-      const request = new ROSLIB.ServiceRequest({
-        command: 'goto_ned',
-        parameter: 0.0,
-        timeout: timeout
-      });
-
-      blocklyCommandService.value!.callService(
-        request,
-        (response: any) => {
-          if (response.success) {
-            console.log(`✅ goto_ned completed in ${response.execution_time}s: ${response.message}`);
-            resolve(response);
-          } else {
-            console.error(`❌ goto_ned failed: ${response.message}`);
-            reject(response.message);
-          }
-        },
-        (error: any) => {
-          console.error(`❌ Service call failed for goto_ned:`, error);
-          reject(error);
+    blocklyCommandService.value.callService(
+      request,
+      (response: any) => {
+        if (response.success) {
+          console.log(`✅ goto_ned completed in ${response.execution_time}s: ${response.message}`);
+          resolve(response);
+        } else {
+          console.error(`❌ goto_ned failed: ${response.message}`);
+          reject(response.message);
         }
-      );
-    }, 50);
+      },
+      (error: any) => {
+        console.error(`❌ Service call failed for goto_ned:`, error);
+        reject(error);
+      }
+    );
   });
 };
 
@@ -930,10 +920,14 @@ const navCtx: tagNav.NavContext = {
 // Ask the aircraft's tag_nav node first. Resolves onboard=false when the service
 // is not there (simulator, or a drone without the node), so the caller can fall
 // back to the browser prototype. Any other failure is a real one.
-const callTagNav = (command: string, parameter: number, timeout: number, extra: Record<string, number> = {}) =>
+// Fields are TagNavCommand's: tag_id, hold_s, forward/right/down (m/s), timeout.
+const callTagNav = (command: string, fields: { tag_id?: number; hold_s?: number; forward?: number; right?: number; down?: number; timeout?: number } = {}) =>
   new Promise<{ onboard: boolean; ok: boolean; message: string }>((resolve) => {
     if (!tagNavService.value) return resolve({ onboard: false, ok: false, message: 'not connected' });
-    const request = new ROSLIB.ServiceRequest({ command, parameter, timeout, ...extra });
+    const request = new ROSLIB.ServiceRequest({
+      command, tag_id: Math.round(fields.tag_id ?? -1), hold_s: fields.hold_s ?? 0,
+      forward: fields.forward ?? 0, right: fields.right ?? 0, down: fields.down ?? 0, timeout: fields.timeout ?? 0,
+    });
     tagNavService.value.callService(request,
       (r: any) => resolve({ onboard: true, ok: !!r.success, message: r.message || '' }),
       (err: any) => {
@@ -957,7 +951,7 @@ const runAprilTagNavBlock = async (block: any): Promise<boolean> => {
       await new Promise(r => setTimeout(r, 300));
       navCtx.publish({ command: 'stop_velocity' });
       console.log(`🏷️ waiting for pilot hand-off (up to ${timeout} s)`);
-      const r = await callTagNav('wait_for_offboard', 0, timeout);
+      const r = await callTagNav('wait_for_offboard', { timeout });
       if (!r.onboard) throw new Error('pilot hand-off needs the aircraft\'s tag_nav node');
       console.log(`🏷️ hand-off: ${r.ok ? 'accepted' : 'FAILED'} ${r.message}`);
       if (!r.ok) throw new Error(r.message);
@@ -965,7 +959,7 @@ const runAprilTagNavBlock = async (block: any): Promise<boolean> => {
     }
     case 'apriltag_wait_for_tag': {
       const id = getInputValue(block, 'TAG_ID', 0);
-      const r = await callTagNav('wait_for_tag', id, tagNav.NAV.waitTimeoutS);
+      const r = await callTagNav('wait_for_tag', { tag_id: id, timeout: tagNav.NAV.waitTimeoutS });
       if (r.onboard) {
         console.log(`🏷️ on-board wait_for_tag ${id}: ${r.ok ? 'ok' : 'FAILED'} ${r.message}`);
         if (!r.ok) throw new Error(r.message);
@@ -979,7 +973,7 @@ const runAprilTagNavBlock = async (block: any): Promise<boolean> => {
       const speed = getInputValue(block, 'SPEED', 0.5);
       const id = getInputValue(block, 'TAG_ID', 1);
       const v = tagNav.bodyVelocity(dir, speed);
-      const r = await callTagNav('fly_until_tag', id, tagNav.NAV.transitTimeoutS, { north: v.vx, east: v.vy, down: v.vz });
+      const r = await callTagNav('fly_until_tag', { tag_id: id, forward: v.vx, right: v.vy, down: v.vz, timeout: tagNav.NAV.transitTimeoutS });
       if (r.onboard) {
         console.log(`🏷️ on-board fly_until_tag ${id}: ${r.ok ? 'ok' : 'FAILED'} ${r.message}`);
         if (!r.ok) throw new Error(r.message);
@@ -990,18 +984,36 @@ const runAprilTagNavBlock = async (block: any): Promise<boolean> => {
     }
     case 'apriltag_center_on_tag': {
       const id = getInputValue(block, 'TAG_ID', 0);
-      const r = await callTagNav('center_on_tag', id, tagNav.NAV.center.timeoutS);
+      const hold = Math.max(0, getInputValue(block, 'HOLD', 1));   // programs saved before HOLD existed get 1 s
+      const r = await callTagNav('center_on_tag', { tag_id: id, timeout: tagNav.NAV.center.timeoutS });
       if (r.onboard) {
         console.log(`🏷️ on-board center_on_tag ${id}: ${r.ok ? 'ok' : 'FAILED'} ${r.message}`);
         if (!r.ok) throw new Error(r.message);
+        if (hold > 0) {
+          const h = await callTagNav('hold_on_tag', { tag_id: id, hold_s: hold });
+          console.log(`🏷️ on-board hold_on_tag ${id} ${hold} s: ${h.ok ? 'ok' : 'FAILED'} ${h.message}`);
+          if (!h.ok) throw new Error(h.message);
+        }
         return true;
       }
       await tagNav.centerOnTag(navCtx, id);
+      if (hold > 0) await new Promise(res => setTimeout(res, hold * 1000));
       return true;
     }
-    case 'apriltag_land_on_tag':
-      await tagNav.landOnTag(navCtx, getInputValue(block, 'TAG_ID', 0));
+    case 'apriltag_land_on_tag': {
+      // On the aircraft: tag_nav centers, then the manager lands. The browser loop below
+      // is the fallback for a simulator without tag_nav and is not for flying hardware.
+      const id = getInputValue(block, 'TAG_ID', 0);
+      const r = await callTagNav('center_on_tag', { tag_id: id, timeout: tagNav.NAV.center.timeoutS });
+      if (r.onboard) {
+        console.log(`🏷️ on-board center_on_tag ${id} before land: ${r.ok ? 'ok' : 'FAILED'} ${r.message}`);
+        if (!r.ok) throw new Error(r.message);
+        await navCtx.callService('land', 0, 30);
+        return true;
+      }
+      await tagNav.landOnTag(navCtx, id);
       return true;
+    }
     default:
       return false;
   }

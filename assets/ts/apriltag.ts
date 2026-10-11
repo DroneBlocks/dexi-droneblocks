@@ -53,7 +53,7 @@ export class AprilTag {
         "type": "apriltag_fly_until_tag",
         "message0": "fly %1 at %2 m/s until tag %3 is seen",
         "args0": [
-          { "type": "field_dropdown", "name": "DIRECTION", "options": [["forward","forward"],["backward","backward"],["left","left"],["right","right"],["up","up"],["down","down"]] },
+          { "type": "field_dropdown", "name": "DIRECTION", "options": [["forward","forward"],["backward","backward"],["left","left"],["right","right"]] },
           { "type": "input_value", "name": "SPEED", "check": "Number" },
           { "type": "input_value", "name": "TAG_ID", "check": "Number" }
         ],
@@ -66,13 +66,16 @@ export class AprilTag {
       },
       {
         "type": "apriltag_center_on_tag",
-        "message0": "center on tag %1",
-        "args0": [{ "type": "input_value", "name": "TAG_ID", "check": "Number" }],
+        "message0": "center on tag %1 and hold %2 s",
+        "args0": [
+          { "type": "input_value", "name": "TAG_ID", "check": "Number" },
+          { "type": "input_value", "name": "HOLD", "check": "Number" }
+        ],
         "inputsInline": true,
         "colour": "#FF9800",
         "previousStatement": null,
         "nextStatement": null,
-        "tooltip": "Move until the tag is directly below the drone, then hold",
+        "tooltip": "Move until the tag is directly below the drone, then stay there for the hold time, still correcting from the tag",
         "helpUrl": ""
       },
       {
@@ -161,7 +164,7 @@ if (apriltagSubscription) {
       return `await tagNav.flyUntilTag('${block.getFieldValue('DIRECTION')}', ${num(block, 'SPEED', '0.5')}, ${num(block, 'TAG_ID', '1')});\n`;
     }
     javascriptGenerator.forBlock['apriltag_center_on_tag'] = function(block: Blockly.Block) {
-      return `await tagNav.centerOnTag(${num(block, 'TAG_ID', '0')});\n`;
+      return `await tagNav.centerOnTag(${num(block, 'TAG_ID', '0')});\nawait new Promise(r => setTimeout(r, ${num(block, 'HOLD', '1')} * 1000));\n`;
     }
     javascriptGenerator.forBlock['apriltag_land_on_tag'] = function(block: Blockly.Block) {
       return `await tagNav.landOnTag(${num(block, 'TAG_ID', '0')});\n`;

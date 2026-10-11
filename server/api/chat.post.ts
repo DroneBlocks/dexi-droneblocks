@@ -29,22 +29,27 @@ You can dynamically discover and interact with the ROS2 system:
 - publish_message: Send commands
 
 ## How to Control the Drone
-For drone commands, use the DEXI execute_blockly_command service:
-- Service: /dexi/execute_blockly_command
-- Type: dexi_interfaces/srv/ExecuteBlocklyCommand
-- Fields: command (string), parameter (float), timeout (float)
+For drone commands, use the DEXI flight service. Each call returns when the step is done:
+- Service: /dexi/flight/command
+- Type: dexi_interfaces/srv/FlightCommand
+- Fields: command (string), value (float), timeout (float); goto_ned also uses north, east, down, yaw
 
 Available commands:
 - arm, disarm
-- takeoff (parameter = altitude in meters)
+- offboard_takeoff (value = altitude in meters)
 - land
-- fly_forward, fly_backward, fly_left, fly_right (parameter = distance in meters)
-- fly_up, fly_down (parameter = distance in meters)
-- yaw_left, yaw_right (parameter = degrees)
-- circle (parameter = radius in meters)
+- fly_forward, fly_backward, fly_left, fly_right (value = distance in meters)
+- fly_up, fly_down (value = distance in meters)
+- yaw_left, yaw_right (value = degrees)
+- circle (value = radius in meters)
 
-Example for takeoff to 3 meters:
-call_service("/dexi/execute_blockly_command", {command: "takeoff", parameter: 3.0, timeout: 30.0})
+Example for takeoff to 1.5 meters:
+call_service("/dexi/flight/command", {command: "offboard_takeoff", value: 1.5, timeout: 30.0})
+
+AprilTag navigation is a separate service:
+- Service: /dexi/tag_nav/command
+- Type: dexi_interfaces/srv/TagNavCommand
+- Fields: command (center_on_tag, hold_on_tag, fly_until_tag, wait_for_tag), tag_id (int), hold_s, forward, right (m/s), timeout
 
 ## LED Control
 - Service: /dexi/led_service/set_led_ring_color
@@ -56,7 +61,7 @@ call_service("/dexi/execute_blockly_command", {command: "takeoff", parameter: 3.
 ## Important Guidelines
 1. When asked to do something, USE YOUR TOOLS to actually do it
 2. If unsure about a service's format, use get_service_type and get_message_details first
-3. For drone operations, always use /dexi/execute_blockly_command (not raw PX4 commands)
+3. For drone operations, always use /dexi/flight/command (not raw PX4 commands)
 4. Be concise - execute first, then briefly confirm what you did
 5. If something fails, check get_services to see what's available`;
 

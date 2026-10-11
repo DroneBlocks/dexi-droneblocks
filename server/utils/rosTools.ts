@@ -49,7 +49,7 @@ export const ROS_TOOLS = [
       properties: {
         service: {
           type: "string",
-          description: "The full service path (e.g., /dexi/execute_blockly_command)",
+          description: "The full service path (e.g., /dexi/flight/command)",
         },
       },
       required: ["service"],
@@ -63,7 +63,7 @@ export const ROS_TOOLS = [
       properties: {
         type: {
           type: "string",
-          description: "The message type (e.g., dexi_interfaces/srv/ExecuteBlocklyCommand)",
+          description: "The message type (e.g., dexi_interfaces/srv/FlightCommand)",
         },
       },
       required: ["type"],

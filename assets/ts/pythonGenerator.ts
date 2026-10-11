@@ -2,9 +2,10 @@ import * as Blockly from 'blockly/core';
 
 // Python preamble with ROS2 imports and class definition
 const PYTHON_PREAMBLE = `#!/usr/bin/env python3
+# Each step is a ROS 2 service call that returns when the step is done (or failed):
+# flight steps on /dexi/flight/command, AprilTag steps on /dexi/tag_nav/command.
 import rclpy
-from rclpy.node import Node
-from dexi_interfaces.srv import ExecuteBlocklyCommand
+from dexi_interfaces.srv import FlightCommand, TagNavCommand, LEDEffect, LEDRingColor, LEDPixelColor
 import time
 
 
@@ -12,58 +13,88 @@ class DexiMission:
     def __init__(self):
         rclpy.init()
         self.node = rclpy.create_node('dexi_blockly_mission')
-        self.client = self.node.create_client(
-            ExecuteBlocklyCommand,
-            '/dexi/execute_blockly_command'
-        )
+        self.client = self.node.create_client(FlightCommand, '/dexi/flight/command')
         while not self.client.wait_for_service(timeout_sec=1.0):
-            self.node.get_logger().info('Waiting for service...')
+            self.node.get_logger().info('Waiting for /dexi/flight/command...')
+        # AprilTag navigation runs in tag_nav on the aircraft, on its own service.
+        self.tag_nav_client = self.node.create_client(TagNavCommand, '/dexi/tag_nav/command')
+        self.led_effect_client = self.node.create_client(LEDEffect, '/dexi/led_service/set_led_effect')
+        self.led_ring_client = self.node.create_client(LEDRingColor, '/dexi/led_service/set_led_ring_color')
+        self.led_pixel_client = self.node.create_client(LEDPixelColor, '/dexi/led_service/set_led_pixel_color')
 
-    def execute_command(self, command: str, parameter: float = 0.0, timeout: float = 30.0):
-        request = ExecuteBlocklyCommand.Request()
-        request.command = command
-        request.parameter = parameter
-        request.timeout = timeout
-        future = self.client.call_async(request)
+    def _call(self, client, request):
+        future = client.call_async(request)
         rclpy.spin_until_future_complete(self.node, future)
         return future.result()
+
+    def execute_command(self, command: str, value: float = 0.0, timeout: float = 30.0):
+        request = FlightCommand.Request()
+        request.command = command
+        request.value = float(value)
+        request.timeout = float(timeout)
+        return self._call(self.client, request)
 
     def execute_ned_command(self, north: float, east: float, down: float, yaw: float = 0.0, timeout: float = 30.0):
-        request = ExecuteBlocklyCommand.Request()
+        request = FlightCommand.Request()
         request.command = 'goto_ned'
-        request.north = north
-        request.east = east
-        request.down = down
-        request.yaw = yaw
-        request.timeout = timeout
-        future = self.client.call_async(request)
-        rclpy.spin_until_future_complete(self.node, future)
-        return future.result()
+        request.north, request.east, request.down = float(north), float(east), float(down)
+        request.yaw = float(yaw)
+        request.timeout = float(timeout)
+        return self._call(self.client, request)
 
     def set_led_effect(self, effect: str):
-        request = ExecuteBlocklyCommand.Request()
-        request.command = f'led_effect_{effect}'
-        future = self.client.call_async(request)
-        rclpy.spin_until_future_complete(self.node, future)
-        return future.result()
+        request = LEDEffect.Request()
+        request.effect_name = effect
+        return self._call(self.led_effect_client, request)
 
     def set_led_ring_color(self, color: str):
-        request = ExecuteBlocklyCommand.Request()
-        request.command = f'led_ring_{color}'
-        future = self.client.call_async(request)
-        rclpy.spin_until_future_complete(self.node, future)
-        return future.result()
+        request = LEDRingColor.Request()
+        request.color = color
+        return self._call(self.led_ring_client, request)
 
     def set_led_pixel(self, index: int, r: int, g: int, b: int):
-        request = ExecuteBlocklyCommand.Request()
-        request.command = 'led_pixel'
-        request.index = index
-        request.r = r
-        request.g = g
-        request.b = b
-        future = self.client.call_async(request)
-        rclpy.spin_until_future_complete(self.node, future)
-        return future.result()
+        request = LEDPixelColor.Request()
+        request.index, request.r, request.g, request.b = int(index), int(r), int(g), int(b)
+        return self._call(self.led_pixel_client, request)
+
+    def tag_nav(self, command: str, tag_id: int = -1, timeout: float = 0.0, hold_s: float = 0.0,
+                forward: float = 0.0, right: float = 0.0):
+        if not self.tag_nav_client.wait_for_service(timeout_sec=5.0):
+            raise RuntimeError(f'{command}: /dexi/tag_nav/command is not available')
+        request = TagNavCommand.Request()
+        request.command = command
+        request.tag_id = int(tag_id)
+        request.timeout = float(timeout)
+        request.hold_s = float(hold_s)
+        request.forward, request.right = float(forward), float(right)
+        result = self._call(self.tag_nav_client, request)
+        print(f"{command} {tag_id}: {'ok' if result.success else 'FAILED'} {result.message}")
+        if not result.success:
+            raise RuntimeError(f'{command} failed: {result.message}')
+        return result
+
+    def wait_for_handoff(self, timeout: float = 120.0):
+        self.execute_command('start_setpoint_stream')
+        return self.tag_nav('wait_for_offboard', timeout=timeout)
+
+    def wait_for_tag(self, tag_id: int, timeout: float = 30.0):
+        return self.tag_nav('wait_for_tag', tag_id, timeout)
+
+    def center_on_tag(self, tag_id: int, hold: float = 1.0, timeout: float = 25.0):
+        """Center over the tag, then stay there for hold seconds, still correcting from the tag."""
+        result = self.tag_nav('center_on_tag', tag_id, timeout)
+        if hold > 0:
+            result = self.tag_nav('hold_on_tag', tag_id, hold_s=hold)
+        return result
+
+    def fly_until_tag(self, direction: str, speed: float, tag_id: int, timeout: float = 20.0):
+        """Fly level forward/backward/left/right (relative to the nose) until the tag is seen."""
+        forward, right = {'forward': (1, 0), 'backward': (-1, 0), 'right': (0, 1), 'left': (0, -1)}[direction]
+        return self.tag_nav('fly_until_tag', tag_id, timeout, forward=forward * speed, right=right * speed)
+
+    def land_on_tag(self, tag_id: int):
+        self.center_on_tag(tag_id, hold=0)
+        return self.execute_command('land')
 
     def shutdown(self):
         self.node.destroy_node()
@@ -249,15 +280,15 @@ const blockGenerators: Record<string, BlockGenerator> = {
   // AprilTag navigation. The on-board tag navigation node exposes these through
   // the same service; the browser prototype runs them client-side.
   apriltag_wait_for_handoff: (block, indentLevel) =>
-    indent(`mission.execute_command('start_setpoint_stream'); mission.execute_command('stop_velocity'); mission.tag_nav('wait_for_offboard', timeout=${getInputValue(block, 'TIMEOUT', '120')})`, indentLevel),
+    indent(`mission.wait_for_handoff(${getInputValue(block, 'TIMEOUT', '120')})`, indentLevel),
   apriltag_wait_for_tag: (block, indentLevel) =>
-    indent(`mission.execute_command('wait_for_tag', ${getInputValue(block, 'TAG_ID', '0')})`, indentLevel),
+    indent(`mission.wait_for_tag(${getInputValue(block, 'TAG_ID', '0')})`, indentLevel),
   apriltag_fly_until_tag: (block, indentLevel) =>
-    indent(`mission.fly_velocity('${block.getFieldValue('DIRECTION')}', ${getInputValue(block, 'SPEED', '0.5')}, until_tag=${getInputValue(block, 'TAG_ID', '1')})`, indentLevel),
+    indent(`mission.fly_until_tag('${block.getFieldValue('DIRECTION')}', ${getInputValue(block, 'SPEED', '0.5')}, ${getInputValue(block, 'TAG_ID', '1')})`, indentLevel),
   apriltag_center_on_tag: (block, indentLevel) =>
-    indent(`mission.execute_command('center_on_tag', ${getInputValue(block, 'TAG_ID', '0')})`, indentLevel),
+    indent(`mission.center_on_tag(${getInputValue(block, 'TAG_ID', '0')}, hold=${getInputValue(block, 'HOLD', '1')})`, indentLevel),
   apriltag_land_on_tag: (block, indentLevel) =>
-    indent(`mission.execute_command('land_on_tag', ${getInputValue(block, 'TAG_ID', '0')})`, indentLevel),
+    indent(`mission.land_on_tag(${getInputValue(block, 'TAG_ID', '0')})`, indentLevel),
   apriltag_get_last_id: () => `last_detected_tag_id`,
   apriltag_get_tag_count: () => `detected_tag_count`,
 
