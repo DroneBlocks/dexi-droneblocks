@@ -320,6 +320,11 @@ const options = {
               <field name="NUM">5</field>
             </shadow>
           </value>
+          <value name="ALTITUDE">
+            <shadow type="math_number">
+              <field name="NUM">2</field>
+            </shadow>
+          </value>
         </block>
       </category>
     <category name="LED" colour="#9C27B0">
@@ -1169,7 +1174,7 @@ const runMission = async () => {
           await executeCommandWithService('land', 0, 30);
           console.log(`⏱️ Waiting ${duration} seconds on ground before takeoff...`);
           await new Promise(resolve => setTimeout(resolve, duration * 1000));
-          await executeCommandWithService('offboard_takeoff', 2.0, 30);
+          await executeCommandWithService('offboard_takeoff', getMeters(block, 'ALTITUDE', 2.0), 30);
         } else if (blockType === 'led_effect') {
           const effect = block.getFieldValue('effect');
           if (ledEffectService.value) {

@@ -183,9 +183,13 @@ const blockGenerators: Record<string, BlockGenerator> = {
   },
   nav_land_wait_takeoff: (block, indentLevel) => {
     const duration = getInputValue(block, 'DURATION', '5');
+    const altitude = getInputValue(block, 'ALTITUDE', '2.0');
+    const unit = block.getFieldValue('UNIT') || 'm';
+    const altitudeExpr = convertToMeters(altitude, unit);
+    const comment = unit !== 'm' ? `  # ${altitude} ${unit}` : '';
     return indent(`mission.execute_command('land')`, indentLevel) + '\n' +
            indent(`time.sleep(${duration})`, indentLevel) + '\n' +
-           indent(`mission.execute_command('offboard_takeoff', 2.0)`, indentLevel);
+           indent(`mission.execute_command('offboard_takeoff', ${altitudeExpr})${comment}`, indentLevel);
   },
 
   // Navigation blocks
