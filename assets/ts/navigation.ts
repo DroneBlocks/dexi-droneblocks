@@ -341,18 +341,31 @@ export class Navigation {
       },
       {
         "type": "nav_land_wait_takeoff",
-        "message0": "land for %1 seconds then takeoff",
+        "message0": "land for %1 seconds then takeoff to %2 %3",
         "args0": [
           {
             "type": "input_value",
             "name": "DURATION",
             "check": "Number"
+          },
+          {
+            "type": "input_value",
+            "name": "ALTITUDE",
+            "check": "Number"
+          },
+          {
+            "type": "field_dropdown",
+            "name": "UNIT",
+            "options": [
+              ["m", "m"],
+              ["ft", "ft"]
+            ]
           }
         ],
         "colour": "#E74C3C",
         "previousStatement": null,
         "nextStatement": null,
-        "tooltip": "Land, wait specified seconds, then takeoff again",
+        "tooltip": "Land, wait specified seconds, then takeoff again to the specified altitude",
         "helpUrl": ""
       },
       {
@@ -669,8 +682,11 @@ await new Promise(resolve => setTimeout(resolve, 3000)); // Wait for landing
 
     javascriptGenerator.forBlock['nav_land_wait_takeoff'] = function(block: Blockly.Block, generator: JavascriptGenerator) {
       const duration = generator.valueToCode(block, 'DURATION', javascriptGenerator.ORDER_ATOMIC) || '5';
+      const altitude = generator.valueToCode(block, 'ALTITUDE', javascriptGenerator.ORDER_ATOMIC) || '2.0';
+      const unit = block.getFieldValue('UNIT') || 'm';
+      const altitudeInMeters = convertToMeters(altitude, unit);
       return `
-// Land for ${duration} seconds then takeoff
+// Land for ${duration} seconds then takeoff to ${altitude} ${unit}
 offboardCommand.publish({
   command: 'land',
   distance_or_degrees: 0.0
@@ -679,9 +695,9 @@ await new Promise(resolve => setTimeout(resolve, 3000)); // Wait for landing
 await new Promise(resolve => setTimeout(resolve, ${duration} * 1000)); // Wait on ground
 offboardCommand.publish({
   command: 'offboard_takeoff',
-  distance_or_degrees: 2.0
+  distance_or_degrees: ${altitudeInMeters}
 });
-await new Promise(resolve => setTimeout(resolve, 4000)); // Wait for takeoff
+await new Promise(resolve => setTimeout(resolve, ${altitudeInMeters} * 2000)); // Wait for takeoff
 `;
     }
 
