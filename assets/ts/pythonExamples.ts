@@ -63,6 +63,18 @@ export const pythonExampleGroups: PythonExampleGroup[] = [
         name: 'Hop Back',
         description: 'Take off over tag 1, center and hold, fly backward until tag 0 is seen, land on it.',
         path: `${APRILTAG}/hop_back_to_previous_tag.py`
+      },
+      {
+        id: 'tag-hop-route',
+        name: 'Tag Hop Route',
+        description: 'Take off and hop down a route of tags, tag 0 to tag 1 by default. Options set the route, altitude, and speed.',
+        path: `${OFFBOARD}/apriltag_tag_hop.py`
+      },
+      {
+        id: 'tag-hop-handoff',
+        name: 'Tag Hop from a Pilot Hand-off',
+        description: 'Fly by hand over the first tag and flip to Offboard; the mission takes over and hops the route.',
+        path: `${OFFBOARD}/apriltag_tag_hop_handoff.py`
       }
     ]
   },
