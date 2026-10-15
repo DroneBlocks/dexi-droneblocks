@@ -1053,6 +1053,7 @@ onUnmounted(() => {
 
 /* Divider */
 .divider {
+  margin: 0; /* a global .divider rule adds 1rem above and below */
   width: 6px;
   height: 100%;
   background: #0f3460;
