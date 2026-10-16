@@ -90,7 +90,7 @@ const tagNavService = ref<ROSLIB.Service | null>(null);
 const ledEffectService = ref<ROSLIB.Service | null>(null);
 const ledRingColorService = ref<ROSLIB.Service | null>(null);
 const ledPixelColorService = ref<ROSLIB.Service | null>(null);
-const leftPanelWidth = ref(50); // percentage
+const leftPanelWidth = ref(33); // percentage: blocks a third, sim two thirds
 const isDragging = ref(false);
 const showNotification = ref(false);
 const notificationMessage = ref('');
@@ -1830,7 +1830,7 @@ const onDrag = (e: MouseEvent) => {
 };
 
 const resetSplit = () => {
-  leftPanelWidth.value = 50;
+  leftPanelWidth.value = 33;
   nextTick(() => { if (foo.value?.workspace) Blockly.svgResize(foo.value.workspace); });
 };
 
