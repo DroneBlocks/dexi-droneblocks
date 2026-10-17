@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, nextTick, onMounted, onUnmounted } from 'vue';
 import * as Blockly from 'blockly/core';
 import { Navigation } from '~/assets/ts/navigation';
 import { LED } from '~/assets/ts/led';
@@ -90,7 +90,7 @@ const tagNavService = ref<ROSLIB.Service | null>(null);
 const ledEffectService = ref<ROSLIB.Service | null>(null);
 const ledRingColorService = ref<ROSLIB.Service | null>(null);
 const ledPixelColorService = ref<ROSLIB.Service | null>(null);
-const leftPanelWidth = ref(50); // percentage
+const leftPanelWidth = ref(33); // percentage: blocks a third, sim two thirds
 const isDragging = ref(false);
 const showNotification = ref(false);
 const notificationMessage = ref('');
@@ -1805,12 +1805,18 @@ const stopMission = () => {
   });
 };
 
-const startDragging = () => {
+// The divider captures the pointer while dragging, so moving over the sim's iframe
+// does not swallow the move and release events and leave the divider stuck.
+const startDragging = (e: PointerEvent) => {
   isDragging.value = true;
+  (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  e.preventDefault();
 };
 
 const stopDragging = () => {
+  if (!isDragging.value) return;
   isDragging.value = false;
+  if (foo.value?.workspace) Blockly.svgResize(foo.value.workspace);
 };
 
 const onDrag = (e: MouseEvent) => {
@@ -1819,10 +1825,13 @@ const onDrag = (e: MouseEvent) => {
   const containerWidth = window.innerWidth;
   const newWidth = (e.clientX / containerWidth) * 100;
 
-  // Constrain between 20% and 80%
-  if (newWidth >= 20 && newWidth <= 80) {
-    leftPanelWidth.value = newWidth;
-  }
+  // Constrain between 20% and 80%, pinning at the limit rather than stopping short of it
+  leftPanelWidth.value = Math.min(80, Math.max(20, newWidth));
+};
+
+const resetSplit = () => {
+  leftPanelWidth.value = 33;
+  nextTick(() => { if (foo.value?.workspace) Blockly.svgResize(foo.value.workspace); });
 };
 
 // Save tabs to localStorage
@@ -2348,7 +2357,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <div class="split-container">
+    <div class="split-container" :class="{ resizing: isDragging }">
       <div class="blockly-panel" :style="{ width: viewMode !== 'drone' ? leftPanelWidth + '%' : '100%' }">
         <!-- Blockly Workspace Container -->
         <div class="blockly-workspace-container">
@@ -2378,7 +2387,18 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div v-if="viewMode !== 'drone'" class="divider" @mousedown="startDragging" :class="{ dragging: isDragging }">
+      <div
+        v-if="viewMode !== 'drone'"
+        class="divider"
+        :class="{ dragging: isDragging }"
+        title="Drag to resize. Double-click to reset."
+        @pointerdown="startDragging"
+        @pointermove="onDrag"
+        @pointerup="stopDragging"
+        @pointercancel="stopDragging"
+        @lostpointercapture="stopDragging"
+        @dblclick="resetSplit"
+      >
         <div class="divider-handle"></div>
       </div>
 
@@ -2761,6 +2781,16 @@ button:disabled {
   position: relative;
 }
 
+/* While the divider drags, the iframe and the workspace must not take the pointer or select text. */
+.split-container.resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.split-container.resizing iframe {
+  pointer-events: none;
+}
+
 .blockly-panel {
   height: 100%;
   position: relative;
@@ -2998,12 +3028,14 @@ button:disabled {
 }
 
 .divider {
+  margin: 0; /* a global .divider rule adds 1rem above and below */
   width: 8px;
   height: 100%;
   background-color: #2a9d8f;
   cursor: col-resize;
   position: relative;
   flex-shrink: 0;
+  touch-action: none;
   transition: background-color 0.2s;
   z-index: 1000;
 }

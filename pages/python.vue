@@ -224,6 +224,7 @@ onBeforeUnmount(() => {
 }
 
 .divider {
+  margin: 0; /* a global .divider rule adds 1rem above and below */
   width: 8px;
   height: 100%;
   background-color: #2a9d8f;
