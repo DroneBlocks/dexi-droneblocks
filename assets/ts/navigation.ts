@@ -694,6 +694,11 @@ offboardCommand.publish({
 await new Promise(resolve => setTimeout(resolve, 3000)); // Wait for landing
 await new Promise(resolve => setTimeout(resolve, ${duration} * 1000)); // Wait on ground
 offboardCommand.publish({
+  command: 'arm',
+  distance_or_degrees: 0.0
+});
+await new Promise(resolve => setTimeout(resolve, 1000)); // Wait for arming
+offboardCommand.publish({
   command: 'offboard_takeoff',
   distance_or_degrees: ${altitudeInMeters}
 });

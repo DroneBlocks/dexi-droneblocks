@@ -1174,6 +1174,8 @@ const runMission = async () => {
           await executeCommandWithService('land', 0, 30);
           console.log(`⏱️ Waiting ${duration} seconds on ground before takeoff...`);
           await new Promise(resolve => setTimeout(resolve, duration * 1000));
+          // PX4 disarms a few seconds after landing, so arm again before taking off.
+          await executeCommandWithService('arm', 0, 10);
           await executeCommandWithService('offboard_takeoff', getMeters(block, 'ALTITUDE', 2.0), 30);
         } else if (blockType === 'led_effect') {
           const effect = block.getFieldValue('effect');

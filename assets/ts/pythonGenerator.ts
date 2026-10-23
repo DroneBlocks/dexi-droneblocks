@@ -189,6 +189,7 @@ const blockGenerators: Record<string, BlockGenerator> = {
     const comment = unit !== 'm' ? `  # ${altitude} ${unit}` : '';
     return indent(`mission.execute_command('land')`, indentLevel) + '\n' +
            indent(`time.sleep(${duration})`, indentLevel) + '\n' +
+           indent(`mission.execute_command('arm')`, indentLevel) + '\n' +
            indent(`mission.execute_command('offboard_takeoff', ${altitudeExpr})${comment}`, indentLevel);
   },
 
