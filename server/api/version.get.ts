@@ -23,6 +23,11 @@ async function readEtc(path: string): Promise<string | null> {
 }
 
 export default defineEventHandler(async () => {
+  // A sim stack has no DEXI-OS image underneath. Its compose file passes the sim
+  // release (dexi-sim-ftw tag) instead, stamped in by tools/release-bundle.sh.
+  const sim = process.env.SIM_VERSION?.trim();
+  if (sim) return { os: sim, platform: "sim" };
+
   const [os, platform] = await Promise.all([
     readEtc("/etc/dexi-version"),
     readEtc("/etc/dexi-platform"),

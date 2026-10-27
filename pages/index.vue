@@ -16,7 +16,7 @@
             </span>
             <a
               v-if="osVersion"
-              :href="`https://github.com/DroneBlocks/dexi-os/releases/tag/${osVersion}`"
+              :href="`https://github.com/DroneBlocks/${platform === 'sim' ? 'dexi-sim-ftw' : 'dexi-os'}/releases/tag/${osVersion}`"
               target="_blank"
               rel="noopener"
               class="px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors"
@@ -25,7 +25,7 @@
             </a>
             <span
               v-else
-              title="No /etc/dexi-version on this host. Older image, or the file is not mounted into the container."
+              title="No /etc/dexi-version on this host and no SIM_VERSION. Older image, a file not mounted into the container, or a sim run from a checkout."
               class="px-4 py-2 bg-slate-100 text-slate-500 text-sm font-medium rounded-lg"
             >
               version unknown
