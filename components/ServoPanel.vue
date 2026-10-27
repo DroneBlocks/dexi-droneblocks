@@ -42,11 +42,11 @@ const servoService = new ROSLIB.Service({
 
 // Servo configuration - using pin numbers for dexi servo control
 const servos = ref([
-  { label: 'Servo 1', pin: 0, angle: 90 },
-  { label: 'Servo 2', pin: 1, angle: 90 },
-  { label: 'Servo 3', pin: 2, angle: 90 },
-  { label: 'Servo 4', pin: 3, angle: 90 },
-  { label: 'Servo 5', pin: 4, angle: 90 }
+  { label: 'Servo 0', pin: 0, angle: 90 },
+  { label: 'Servo 1', pin: 1, angle: 90 },
+  { label: 'Servo 2', pin: 2, angle: 90 },
+  { label: 'Servo 3', pin: 3, angle: 90 },
+  { label: 'Servo 4', pin: 4, angle: 90 }
 ]);
 
 const setServoAngle = (servo) => {
