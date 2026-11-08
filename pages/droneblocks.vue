@@ -1024,6 +1024,16 @@ const runAprilTagNavBlock = async (block: any): Promise<boolean> => {
   }
 };
 
+// The step running inside a loop or if: highlight it along with its parent block,
+// and show the loop iteration next to the Launch button.
+const runStep = ref('');
+const markStep = (inner: any, parent: any, label: string | null) => {
+  const workspace = foo.value.workspace;
+  workspace.highlightBlock(parent.id);
+  workspace.highlightBlock(inner.id, true);
+  runStep.value = label ?? '';
+};
+
 const runMission = async () => {
   if (!connected.value || !blocklyCommandService.value) {
     displayNotification('Please connect to ROS first!', 'error');
@@ -1060,6 +1070,7 @@ const runMission = async () => {
 
       // Highlight current block
       workspace.highlightBlock(block.id);
+      runStep.value = '';
 
       try {
         // Parse block and execute command
@@ -1284,6 +1295,7 @@ const runMission = async () => {
               let currentBlock = doBlock;
               while (currentBlock) {
                 const innerBlockType = currentBlock.type;
+                markStep(currentBlock, block, `Repeat ${i + 1}/${repeatCount}`);
 
                 // Execute blocks inside the loop (similar to if statement handling)
                 if (await runAprilTagNavBlock(currentBlock)) {
@@ -1420,6 +1432,7 @@ const runMission = async () => {
                       let ifCurrentBlock = doBlock;
                       while (ifCurrentBlock) {
                         const ifBlockType = ifCurrentBlock.type;
+                        markStep(ifCurrentBlock, block, `Repeat ${i + 1}/${repeatCount}`);
 
                         // Handle blocks inside if (reuse existing handlers)
                         if (ifBlockType === 'led_ring') {
@@ -1536,6 +1549,7 @@ const runMission = async () => {
               let currentBlock = doBlock;
               while (currentBlock) {
                 const innerBlockType = currentBlock.type;
+                markStep(currentBlock, block, `${varName} = ${loopVar}`);
 
                 // Execute blocks inside the for loop
                 if (await runAprilTagNavBlock(currentBlock)) {
@@ -1695,6 +1709,7 @@ const runMission = async () => {
               let currentBlock = doBlock;
               while (currentBlock) {
                 const innerBlockType = currentBlock.type;
+                markStep(currentBlock, block, null);
 
                 // Recursively handle blocks inside the if
                 if (innerBlockType === 'text_print') {
@@ -1777,6 +1792,7 @@ const runMission = async () => {
     }
   } finally {
     isMissionRunning.value = false;
+    runStep.value = '';
   }
 };
 
@@ -2286,6 +2302,7 @@ onUnmounted(() => {
           <span class="hidden sm:inline">📚 Tutorials</span>
           <span class="sm:hidden">📚</span>
         </button>
+        <span v-if="isMissionRunning && runStep" class="run-step" data-testid="run-step">🔁 {{ runStep }}</span>
         <button
           @click="isMissionRunning ? stopMission() : runMission()"
           :disabled="!connected"
@@ -2739,6 +2756,17 @@ button:disabled {
   background: #21867a;
   box-shadow: 0 4px 8px rgba(42, 157, 143, 0.4);
   transform: translateY(-1px);
+}
+
+.run-step {
+  align-self: center;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  background: #fff7e0;
+  color: #7a5200;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .secondary-btn {
