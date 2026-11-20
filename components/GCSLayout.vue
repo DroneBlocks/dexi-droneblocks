@@ -39,8 +39,14 @@
         <!-- Tab Content -->
         <div class="flex-1 relative min-h-0">
           <!-- Camera Tab -->
-          <div v-if="activeTab === 'camera'" class="p-2 sm:p-4 h-full">
+          <div v-if="activeTab === 'camera'" class="p-2 sm:p-4 h-full relative">
             <CameraFeed />
+            <CaptureControls />
+          </div>
+
+          <!-- Media Tab: photos and videos saved on the drone -->
+          <div v-if="activeTab === 'media'" class="h-full">
+            <MediaBrowser />
           </div>
 
           <!-- Map Tab -->
@@ -99,6 +105,8 @@ import ServoPanel from '~/components/ServoPanel.vue';
 import MainMenu from '~/components/MainMenu.vue';
 import DroneGrid from '~/components/DroneGrid.vue';
 import KeyboardControl from '~/components/KeyboardControl.vue';
+import CaptureControls from '~/components/CaptureControls.vue';
+import MediaBrowser from '~/components/MediaBrowser.vue';
 
 const props = defineProps({
   flightControlsRef: {
@@ -133,6 +141,7 @@ const sitlEnabled = computed(() => isDevMode() || route.query.sitl === 'true');
 const allTabs = [
   { id: 'camera', name: 'Camera' },
   { id: 'map', name: 'Map' },
+  { id: 'media', name: 'Media' },
   { id: 'sitl', name: 'SITL' }
 ];
 
